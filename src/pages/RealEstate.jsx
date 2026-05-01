@@ -1,0 +1,188 @@
+import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
+import { ArrowLeft, Building2, MapPin, TrendingUp, ArrowUpCircle, DollarSign } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import useRealEstateStore from '../stores/useRealEstateStore'
+import useUserStore from '../stores/useUserStore'
+import Card from '../components/Card'
+import ProgressBar from '../components/ProgressBar'
+
+const fmt = (n) => {
+  n = parseFloat(n || 0)
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`
+  return `$${n.toFixed(0)}`
+}
+
+const DISTRICTS = ['All', 'Downtown', 'Suburbs', 'Industrial', 'Waterfront']
+
+const TIER_COLORS = ['#8892B0', '#3DD68C', '#5B9CF6', '#B56EFF', '#F5C842']
+const TIER_NAMES  = ['Lot', 'Cottage', 'House', 'Complex', 'Tower']
+
+export default function RealEstate() {
+  const navigate  = useNavigate()
+  const { lots, fetchLots, purchaseLot, upgradeLot, collectRent, isLoading } = useRealEstateStore()
+  const balance   = useUserStore((s) => parseFloat(s.user?.balance || 0))
+  const [district, setDistrict] = useState('All')
+
+  useEffect(() => { fetchLots?.() }, [])
+
+  const filtered = district === 'All' ? lots : lots.filter(l => l.district === district)
+
+  const totalRent = lots.reduce((s, l) => s + (l.owned ? parseFloat(l.rental_base || 0) : 0), 0)
+
+  return (
+    <div className="page-scroll">
+      <div className="px-4 pt-5 pb-24 space-y-4">
+
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => navigate(-1)}
+            className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <ArrowLeft size={16} style={{ color: 'var(--col-text-1)' }} />
+          </motion.button>
+          <div>
+            <h1 className="font-black text-xl" style={{ color: 'var(--col-text-1)' }}>Real Estate</h1>
+            <p className="text-xs" style={{ color: 'var(--col-text-3)' }}>Property portfolio</p>
+          </div>
+        </div>
+
+        {/* Stats */}
+        {totalRent > 0 && (
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(61,214,140,0.12)', border: '1px solid rgba(61,214,140,0.25)' }}>
+                <TrendingUp size={18} style={{ color: '#3DD68C' }} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black tracking-widest uppercase" style={{ color: 'var(--col-text-3)' }}>Rental Income</p>
+                <p className="text-2xl font-black nums" style={{ color: '#3DD68C' }}>{fmt(totalRent)}<span className="text-sm font-semibold">/hr</span></p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* District filter */}
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {DISTRICTS.map(d => (
+            <motion.button
+              key={d}
+              whileTap={{ scale: 0.94 }}
+              onClick={() => setDistrict(d)}
+              className="flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-black tracking-wide uppercase"
+              style={{
+                background: district === d ? 'rgba(245,200,66,0.14)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${district === d ? 'rgba(245,200,66,0.30)' : 'rgba(255,255,255,0.07)'}`,
+                color: district === d ? '#F5C842' : 'var(--col-text-3)',
+              }}
+            >
+              {d}
+            </motion.button>
+          ))}
+        </div>
+
+        {/* Lots */}
+        <Card>
+          <p className="text-[10px] font-black tracking-widest uppercase mb-3" style={{ color: 'var(--col-text-3)' }}>
+            Properties — {filtered.length}
+          </p>
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-20 rounded-2xl animate-shimmer" style={{ background: 'rgba(255,255,255,0.04)' }} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map(lot => {
+                const tierColor = TIER_COLORS[lot.tier || 0]
+                const tierName  = TIER_NAMES[lot.tier || 0]
+                return (
+                  <div
+                    key={lot.id}
+                    className="p-3.5 rounded-2xl"
+                    style={{
+                      background: lot.owned ? `${tierColor}0A` : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${lot.owned ? tierColor + '28' : 'rgba(255,255,255,0.06)'}`,
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{ background: lot.owned ? `${tierColor}18` : 'rgba(255,255,255,0.05)' }}
+                      >
+                        <Building2 size={16} style={{ color: lot.owned ? tierColor : 'var(--col-text-3)' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-black text-sm" style={{ color: 'var(--col-text-1)' }}>{lot.name}</p>
+                          <span
+                            className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded"
+                            style={{ background: `${tierColor}18`, color: tierColor }}
+                          >
+                            {tierName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <MapPin size={9} style={{ color: 'var(--col-text-3)' }} />
+                          <p className="text-xs" style={{ color: 'var(--col-text-3)' }}>{lot.district}</p>
+                        </div>
+                        {lot.owned && (
+                          <p className="text-xs nums font-semibold mt-1" style={{ color: '#3DD68C' }}>
+                            +{fmt(lot.rental_base)}/hr
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Action */}
+                      {!lot.owned ? (
+                        <motion.button
+                          whileTap={{ y: 2, scale: 0.97 }}
+                          onClick={() => purchaseLot?.(lot.id)}
+                          disabled={balance < parseFloat(lot.base_price || 0)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-black"
+                          style={{
+                            background: 'linear-gradient(180deg, #F5C842 0%, #C49B20 100%)',
+                            color: '#1A1200',
+                            opacity: balance < parseFloat(lot.base_price || 0) ? 0.4 : 1,
+                          }}
+                        >
+                          {fmt(lot.base_price)}
+                        </motion.button>
+                      ) : lot.uncollected_rent > 0 ? (
+                        <motion.button
+                          whileTap={{ y: 2, scale: 0.97 }}
+                          onClick={() => collectRent?.(lot.id)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1"
+                          style={{ background: 'rgba(61,214,140,0.15)', color: '#3DD68C', border: '1px solid rgba(61,214,140,0.25)' }}
+                        >
+                          <DollarSign size={11} />
+                          Collect
+                        </motion.button>
+                      ) : (
+                        <motion.button
+                          whileTap={{ y: 2, scale: 0.97 }}
+                          onClick={() => upgradeLot?.(lot.id)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1"
+                          style={{ background: 'rgba(91,156,246,0.12)', color: '#5B9CF6', border: '1px solid rgba(91,156,246,0.22)' }}
+                        >
+                          <ArrowUpCircle size={11} />
+                          Upgrade
+                        </motion.button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  )
+}

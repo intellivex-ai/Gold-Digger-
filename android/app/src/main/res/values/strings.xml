@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gold Digger</string>
+    <string name="title_activity_main">Gold Digger</string>
+    <string name="package_name">com.golddigger.app</string>
+    <string name="custom_url_scheme">com.golddigger.app</string>
+    <string name="server_client_id">871169006991-jo7h15b61bkgccnl4s4pbbl7ljma3ejk.apps.googleusercontent.com</string>
+</resources>

@@ -1,0 +1,28 @@
+{
+  "appId": "com.golddigger.app",
+  "appName": "Gold Digger",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "http://localhost:3000",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#FFFFFF",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#FFFFFF"
+    },
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "serverClientId": "871169006991-jo7h15b61bkgccnl4s4pbbl7ljma3ejk.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": true
+    }
+  }
+}
