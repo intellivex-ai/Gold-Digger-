@@ -1,3 +1,12 @@
+/**
+ * Auth.jsx
+ * 
+ * The main authentication screen for Gold Digger. Handles email/password 
+ * sign in, sign up, and Google OAuth via Supabase.
+ * 
+ * Features a dynamic background and custom game-styled input components.
+ */
+
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -16,45 +25,57 @@ export default function Auth() {
   const [googleLoading, setGLoading] = useState(false)
   const [error, setError]            = useState('')
 
+  // ── Email/Password Authentication ──
   async function handleSubmit(e) {
     e.preventDefault()
     setError(''); setLoading(true)
     try {
-      tab === 'login'
-        ? await signIn(email, password)
-        : await signUp(email, password, username)
+      if (tab === 'login') {
+        await signIn(email, password)
+      } else {
+        await signUp(email, password, username)
+      }
       sounds.success?.()
     } catch (err) {
       setError(err.message || 'Authentication failed.')
       sounds.error?.()
-    } finally { setLoading(false) }
+    } finally { 
+      setLoading(false) 
+    }
   }
 
+  // ── Google OAuth Integration ──
   async function handleGoogleSignIn() {
     setError(''); setGLoading(true)
-    try { await signInWithGoogle() }
-    catch (err) { setError(err.message || 'Google Sign-In failed.'); sounds.error?.(); setGLoading(false) }
+    try { 
+      await signInWithGoogle() 
+    } catch (err) { 
+      setError(err.message || 'Google Sign-In failed.')
+      sounds.error?.()
+      setGLoading(false) 
+    }
   }
 
   return (
     <div
       className="min-h-screen w-full flex flex-col items-center justify-center px-5 py-10"
       style={{
+        // Dynamic radial gradients create the "Premium Fintech" aesthetic
         background: `
           radial-gradient(ellipse 60% 50% at 50% 0%, rgba(91,156,246,0.15) 0%, transparent 70%),
           radial-gradient(ellipse 40% 30% at 80% 80%, rgba(181,110,255,0.10) 0%, transparent 70%),
           #0A0B0F`,
       }}
     >
-      {/* ── LOGO ── */}
+      {/* ── LOGO & BRANDING ── */}
       <motion.div
         initial={{ opacity: 0, y: -24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, type: 'spring', stiffness: 200 }}
         className="flex flex-col items-center mb-8"
       >
-        {/* Game logo */}
         <div className="relative mb-4">
+          {/* Pulsing background glow behind the logo */}
           <motion.div
             animate={{ scale: [1, 1.12, 1], opacity: [0.4, 0.7, 0.4] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
@@ -87,7 +108,7 @@ export default function Auth() {
         </p>
       </motion.div>
 
-      {/* ── AUTH CARD ── */}
+      {/* ── AUTHENTICATION CARD ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -95,7 +116,7 @@ export default function Auth() {
         className="w-full max-w-sm"
       >
         <div className="card !p-6">
-          {/* Tab toggle */}
+          {/* ── Mode Selection Tabs ── */}
           <div
             className="flex rounded-xl p-1 mb-6"
             style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.06)' }}
@@ -120,6 +141,7 @@ export default function Auth() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Username Input (Signup Only) */}
             <AnimatePresence>
               {tab === 'signup' && (
                 <motion.div
@@ -147,6 +169,7 @@ export default function Auth() {
               </button>
             </div>
 
+            {/* Error Feedback */}
             {error && (
               <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="text-xs font-bold px-3 py-2 rounded-lg"
@@ -169,14 +192,14 @@ export default function Auth() {
             </motion.button>
           </form>
 
-          {/* Divider */}
+          {/* ── Visual Divider ── */}
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
             <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--col-text-3)' }}>or</span>
             <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
           </div>
 
-          {/* Google */}
+          {/* ── Google OAuth Button ── */}
           <motion.button
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
@@ -206,6 +229,9 @@ export default function Auth() {
   )
 }
 
+/**
+ * Reusable input component styled for the game UI
+ */
 function GameInput({ icon, placeholder, value, onChange, type, required }) {
   return (
     <div className="relative flex items-center">
@@ -222,6 +248,9 @@ function GameInput({ icon, placeholder, value, onChange, type, required }) {
   )
 }
 
+/**
+ * SVG asset for Google OAuth
+ */
 function GoogleLogo() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">

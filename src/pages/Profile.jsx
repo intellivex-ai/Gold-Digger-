@@ -1,3 +1,11 @@
+/**
+ * Profile.jsx
+ * 
+ * The central user hub displaying identity information, global wealth statistics,
+ * lifestyle assets, and unlocked achievements.
+ * Also handles basic profile mutations (username editing) and application logout.
+ */
+
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Edit3, Check, X, LogOut, Star, Crown, Home, Car, Watch } from 'lucide-react'
@@ -9,8 +17,10 @@ import ReputationBadge from '../components/ReputationBadge'
 import AchievementGrid from '../components/AchievementGrid'
 import ProgressBar from '../components/ProgressBar'
 
+// Map strings from DB to respective Lucide components
 const LIFESTYLE_ICONS = { home: Home, car: Car, watch: Watch }
 
+// Framer Motion variants for staggered child entry animations
 const stagger = {
   hidden: { opacity: 0 },
   show: {
@@ -24,11 +34,13 @@ const item = {
 }
 
 export default function Profile() {
+  // Store bindings
   const user          = useUserStore((s) => s.user)
   const logout        = useUserStore((s) => s.logout)
   const updateProfile = useUserStore((s) => s.updateProfile)
   const businesses    = useBusinessStore((s) => s.businesses)
 
+  // Local State: Profile Editing
   const [isEditing, setIsEditing] = useState(false)
   const [editName,  setEditName]  = useState('')
   const [isSaving,  setIsSaving]  = useState(false)
@@ -36,17 +48,21 @@ export default function Profile() {
 
   if (!user) return null
 
+  // ── Derived Statistics ──
   const xpProgress    = (user.xp || 0) / (user.xpToNextLevel || 100000)
   const passiveIncome = businesses.reduce((s, b) => s + parseFloat(b.revenue_per_minute || 0), 0)
   const businessValue = businesses.reduce((s, b) => s + parseFloat(b.upgrade_cost || 0), 0)
+  // Net worth calculation: Liquid Cash + Sum of all business valuation
   const netWorth      = parseFloat(user.cash || 0) + businessValue
 
+  // Normalize lifestyle data into iterable array
   const lifestyle = [
     { label: 'Residence', data: user.lifestyle?.house },
     { label: 'Vehicle',   data: user.lifestyle?.car },
     { label: 'Watch',     data: user.lifestyle?.watch },
   ]
 
+  // Formatter for stat cards
   const fmtMoney = (n) => {
     if (n >= 1e9) return `$${(n/1e9).toFixed(2)}B`
     if (n >= 1e6) return `$${(n/1e6).toFixed(2)}M`
@@ -54,15 +70,34 @@ export default function Profile() {
     return `$${n.toLocaleString()}`
   }
 
-  const handleEditClick = () => { setEditName(user.username); setError(''); setIsEditing(true) }
+  // ── Handlers ──
+  const handleEditClick = () => { 
+    setEditName(user.username)
+    setError('')
+    setIsEditing(true) 
+  }
+  
   const handleSave = async () => {
-    if (!editName.trim()) { setError('Username cannot be empty'); return }
-    if (editName === user.username) { setIsEditing(false); return }
-    setIsSaving(true); setError('')
+    if (!editName.trim()) { 
+      setError('Username cannot be empty')
+      return 
+    }
+    if (editName === user.username) { 
+      setIsEditing(false)
+      return 
+    }
+    
+    setIsSaving(true)
+    setError('')
+    
     const { success, message } = await updateProfile({ username: editName.trim() })
     setIsSaving(false)
-    if (success) setIsEditing(false)
-    else setError(message || 'That username might be taken.')
+    
+    if (success) {
+      setIsEditing(false)
+    } else {
+      setError(message || 'That username might be taken.')
+    }
   }
 
   return (
@@ -76,21 +111,19 @@ export default function Profile() {
         </h1>
         <button
           onClick={logout}
-          className="flex items-center gap-1.5 text-xs font-bold tracking-wide px-3 py-1.5 rounded-lg transition-all"
+          className="flex items-center gap-1.5 text-xs font-bold tracking-wide px-3 py-2 rounded-lg transition-all active:opacity-70"
           style={{
-            color: 'var(--col-text-3)',
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            color: 'var(--col-red)',
+            background: 'rgba(255,90,90,0.08)',
+            border: '1px solid rgba(255,90,90,0.20)',
           }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--col-red)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--col-text-3)'}
         >
           <LogOut size={12} />
           LOGOUT
         </button>
       </motion.div>
 
-      {/* ── AVATAR + IDENTITY CARD ── */}
+      {/* ── IDENTITY & PROGRESS CARD ── */}
       <motion.div variants={item}>
         <div
           className="relative rounded-2xl overflow-hidden p-5"
@@ -100,12 +133,13 @@ export default function Profile() {
             boxShadow: '0 0 32px rgba(245,200,66,0.08), 0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.07)',
           }}
         >
-          {/* Ambient glow */}
+          {/* Ambient glow effect in background */}
           <div className="absolute top-0 right-0 w-48 h-48 pointer-events-none"
             style={{ background: 'radial-gradient(circle, rgba(245,200,66,0.06) 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
 
           <div className="relative z-10 flex items-center gap-4">
-            {/* Avatar */}
+            
+            {/* Avatar Hexagon/Square */}
             <div className="relative flex-shrink-0">
               <motion.div
                 animate={{ boxShadow: ['0 0 20px rgba(245,200,66,0.3)', '0 0 40px rgba(245,200,66,0.6)', '0 0 20px rgba(245,200,66,0.3)'] }}
@@ -121,7 +155,7 @@ export default function Profile() {
                 {user.username?.slice(0, 2).toUpperCase()}
               </motion.div>
 
-              {/* Level ring */}
+              {/* Level Indicator Ring */}
               <div
                 className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border-2"
                 style={{
@@ -135,9 +169,10 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Name + edit */}
+            {/* User Details & Editing Logic */}
             <div className="flex-1 min-w-0">
               {isEditing ? (
+                // Edit Mode View
                 <div className="space-y-2">
                   <input
                     autoFocus
@@ -158,6 +193,7 @@ export default function Profile() {
                   </div>
                 </div>
               ) : (
+                // Standard View
                 <>
                   <h2 className="text-xl font-black tracking-tight truncate"
                     style={{ color: 'var(--col-text-1)' }}>
@@ -172,7 +208,7 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* XP Bar */}
+          {/* XP Progress Bar */}
           <div className="relative z-10 mt-4">
             <div className="flex justify-between mb-1.5">
               <span className="text-[10px] font-black tracking-widest uppercase"
@@ -186,6 +222,7 @@ export default function Profile() {
             <ProgressBar value={xpProgress} color="xp" chunky />
           </div>
 
+          {/* Edit Trigger */}
           {!isEditing && (
             <div className="relative z-10 mt-4">
               <Button variant="ghost" size="sm" onClick={handleEditClick}>
@@ -233,7 +270,8 @@ export default function Profile() {
         </Card>
       </motion.div>
 
-      {/* ── LIFESTYLE ── */}
+      {/* ── LIFESTYLE ASSETS ── */}
+      {/* Renders property/vehicles owned by player */}
       {user.lifestyle && (
         <motion.div variants={item}>
           <Card>
@@ -245,6 +283,7 @@ export default function Profile() {
               {lifestyle.map(({ label, data }) => {
                 if (!data) return null
                 const IconComp = LIFESTYLE_ICONS[data.icon] || Star
+                
                 return (
                   <div key={label}
                     className="flex items-center gap-3 rounded-xl p-2.5"
@@ -296,7 +335,7 @@ export default function Profile() {
         </motion.div>
       )}
 
-      {/* ── PREMIUM BANNER ── */}
+      {/* ── PREMIUM BANNER (Monetization hooks) ── */}
       <motion.div variants={item}>
         <motion.div
           whileHover={{ y: -2, boxShadow: '0 16px 48px rgba(245,200,66,0.25)' }}
@@ -309,6 +348,7 @@ export default function Profile() {
             boxShadow: '0 0 24px rgba(245,200,66,0.15), 0 4px 16px rgba(0,0,0,0.5)',
           }}
         >
+          {/* Subtle background flair */}
           <div className="absolute top-0 right-0 w-32 h-32 pointer-events-none"
             style={{ background: 'radial-gradient(circle, rgba(245,200,66,0.10) 0%, transparent 70%)', transform: 'translate(20%, -20%)' }} />
 

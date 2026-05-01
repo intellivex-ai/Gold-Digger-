@@ -1,3 +1,10 @@
+/**
+ * App.jsx
+ * 
+ * This is the main shell of the application. It handles routing (which page to show)
+ * and starts up global features like fetching data and listening for real-time updates.
+ */
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useSupabaseAuth } from './hooks/useSupabaseAuth'
 import { useRealtimeSubscription } from './hooks/useRealtimeSubscription'
@@ -7,11 +14,11 @@ import useEconomyStore from './stores/useEconomyStore'
 import useCryptoStore from './stores/useCryptoStore'
 import { useEffect } from 'react'
 
-// Layout
+// Layout components
 import Layout from './components/Layout'
 import LoadingScreen from './components/LoadingScreen'
 
-// Pages — original
+// Original Pages
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
 import Businesses from './pages/Businesses'
@@ -25,7 +32,7 @@ import Chat from './pages/Chat'
 import Leaderboard from './pages/Leaderboard'
 import Profile from './pages/Profile'
 
-// Pages — new features
+// New Feature Pages
 import CryptoMarket from './pages/CryptoMarket'
 import SkillTree from './pages/SkillTree'
 import RealEstate from './pages/RealEstate'
@@ -34,20 +41,31 @@ import BlackMarket from './pages/BlackMarket'
 import VentureCapital from './pages/VentureCapital'
 import EconomyEvents from './pages/EconomyEvents'
 
-/** Protects routes from unauthenticated access */
+/**
+ * ProtectedRoute Wrapper
+ * 
+ * This component wraps pages that should only be seen by logged-in users.
+ * If the user isn't logged in, it redirects them to the "/auth" page.
+ */
 function ProtectedRoute({ children }) {
   const isAuthenticated = useUserStore((s) => s.isAuthenticated)
   const isLoading       = useUserStore((s) => s.isLoading)
+  
+  // Show a loading screen while we figure out if they are logged in
   if (isLoading) return <LoadingScreen />
+  
+  // If logged in, show the requested page. Otherwise, send to login screen.
   return isAuthenticated ? children : <Navigate to="/auth" replace />
 }
 
 /**
- * App-level side-effects — runs once on mount.
- * Realtime subscriptions are owned by individual store hooks,
- * NOT duplicated here.  EconomyEventBanner owns its own channel.
+ * AppEffects
+ * 
+ * This hidden component is responsible for loading the initial data
+ * when the app first opens. It runs once when mounted.
  */
 function AppEffects() {
+  // Grab functions from our stores to fetch data
   const fetchStocks     = useMarketStore((s) => s.fetchStocks)
   const startSimulation = useMarketStore((s) => s.startLocalSimulation)
   const fetchEvents     = useEconomyStore((s) => s.fetchEvents)
@@ -55,42 +73,58 @@ function AppEffects() {
   const simulateCrypto  = useCryptoStore((s) => s.simulatePrices)
   const userId          = useUserStore((s) => s.user?.id)
 
+  // Use an effect to run these tasks right when the app starts
   useEffect(() => {
-    // Stocks – fetch + local sim
+    // 1. Fetch real stock prices, then start the visual "fake" price jitter
     fetchStocks()
     const stopSim = startSimulation()
 
-    // Economy events – fetch only (subscription in EconomyEventBanner)
+    // 2. Fetch global economy events
     fetchEvents()
 
-    // Crypto – fetch + price simulation
+    // 3. Fetch crypto assets and start their price simulation
     fetchCrypto()
     const stopCrypto = simulateCrypto()
 
+    // Clean up our running simulations when the app is closed
     return () => {
       stopSim()
       stopCrypto()
     }
-  }, [])
+  }, []) // Empty array means "only run this once"
 
-  // Realtime profile/businesses subscription (profile-aware)
+  // 4. Start listening to Supabase for real-time changes to this specific user
   useRealtimeSubscription(userId)
 
+  // This component doesn't draw anything on the screen
   return null
 }
 
+/**
+ * Main App Component
+ * 
+ * Sets up the router and all the different URLs in our game.
+ */
 export default function App() {
+  // Check the user's login status right away
   useSupabaseAuth()
 
   return (
+    // BrowserRouter keeps track of the URL in the address bar
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AppEffects />
+      
+      {/* Background container that fills the screen */}
       <div className="min-h-screen flex items-center justify-center overflow-hidden" style={{ background: 'inherit' }}>
         <Routes>
-          {/* Public */}
+          {/* Public Route - anyone can see this */}
           <Route path="/auth" element={<Auth />} />
 
-          {/* Protected – nested under the shell Layout */}
+          {/* 
+            Protected Routes 
+            These are nested under the "Layout" component, which gives them
+            the standard top header and bottom navigation bar.
+          */}
           <Route
             path="/"
             element={
@@ -99,20 +133,21 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            {/* "index" means this is the default page when visiting "/" */}
             <Route index element={<Dashboard />} />
 
-            {/* Businesses */}
+            {/* Business Features */}
             <Route path="businesses"    element={<Businesses />} />
             <Route path="business/:id" element={<BusinessDetail />} />
 
-            {/* Market */}
+            {/* Stock Market Features */}
             <Route path="market" element={<Market />}>
               <Route index              element={<StocksTab />} />
               <Route path="player-trade" element={<PlayerTrade />} />
             </Route>
             <Route path="market/stocks/:symbol" element={<StockDetail />} />
 
-            {/* Feature pages */}
+            {/* Additional Markets & Features */}
             <Route path="crypto"          element={<CryptoMarket />} />
             <Route path="auction"         element={<AuctionHouse />} />
             <Route path="real-estate"     element={<RealEstate />} />
@@ -121,17 +156,17 @@ export default function App() {
             <Route path="skills"          element={<SkillTree />} />
             <Route path="events"          element={<EconomyEvents />} />
 
-            {/* Social */}
+            {/* Social Features (Corporation, Chat, Leaderboard) */}
             <Route path="social" element={<Social />}>
               <Route index              element={<Corporation />} />
               <Route path="chat"        element={<Chat />} />
               <Route path="leaderboard" element={<Leaderboard />} />
             </Route>
 
-            {/* Profile */}
+            {/* Player Profile */}
             <Route path="character" element={<Profile />} />
 
-            {/* Catch-all */}
+            {/* Catch-all: If user types a random URL, send them back to Dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

@@ -1,3 +1,11 @@
+/**
+ * Dashboard.jsx
+ * 
+ * The main entry point post-login. Displays a high-level summary of the player's empire,
+ * including total net worth, passive income generation, reputation, and level.
+ * Features an interactive "Collect Earnings" mechanic that calculates offline revenue.
+ */
+
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -16,7 +24,12 @@ import CoinShower from '../components/CoinShower'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import logoSrc from '../assets/logo.svg'
 
-// ── Animated odometer-style number counter ──────────────────────
+/**
+ * AnimatedNumber Component
+ * 
+ * Creates an odometer-style counting effect for large numbers (like Net Worth).
+ * Uses requestAnimationFrame for a smooth 60fps cubic ease-out transition.
+ */
 function AnimatedNumber({ value, prefix = '', suffix = '', decimals = 0 }) {
   const [display, setDisplay] = useState(value)
   const prevRef = useRef(value)
@@ -49,7 +62,8 @@ function AnimatedNumber({ value, prefix = '', suffix = '', decimals = 0 }) {
   return <span className="nums">{fmt(display)}</span>
 }
 
-// ── Passive income tier progression ────────────────────────────
+// ── Passive Income Tier Progression ──
+// Grants visual prestige based on how much the player earns per minute.
 const TIERS = [
   { name: 'Hustler',       min: 0,     color: '#8892B0' },
   { name: 'Entrepreneur',  min: 50,    color: '#3DD68C' },
@@ -69,33 +83,43 @@ export default function Dashboard() {
   const [uncollectedEarnings, setUncollectedEarnings] = useState(0)
   const [alerts, setAlerts]                     = useState([])
 
+  // Fetch businesses on mount to calculate passive income
   useEffect(() => {
     if (user?.id) fetchBusinesses(user.id)
   }, [user?.id, fetchBusinesses])
 
-  // Real-time uncollected earnings tick
+  /**
+   * Real-Time Earnings Tick
+   * Calculates how much revenue has been generated since the `last_collected_at` timestamp.
+   * Updates locally every second to create a dynamic "mining" effect in the UI.
+   */
   useEffect(() => {
     if (!user?.last_collected_at) { setUncollectedEarnings(0); return }
     const revPerMin = businesses.reduce((s, b) => s + parseFloat(b.revenue_per_minute || 0), 0)
     if (revPerMin <= 0) { setUncollectedEarnings(0); return }
+    
     const calc = () => {
       const ms = Math.max(0, Date.now() - new Date(user.last_collected_at).getTime())
       setUncollectedEarnings((ms / 60000) * revPerMin)
     }
-    calc()
+    calc() // initial run
     const id = setInterval(calc, 1000)
     return () => clearInterval(id)
   }, [user?.last_collected_at, businesses])
 
+  // Fetch recent system alerts/notifications
   useEffect(() => {
+    if (!user?.id) return
     import('../lib/supabase').then(({ supabase }) => {
       supabase.from('notifications').select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false }).limit(5)
         .then(({ data }) => setAlerts(data?.length ? data : []))
         .catch(() => setAlerts([]))
     })
-  }, [])
+  }, [user?.id])
 
+  // Process the collection action and trigger the coin shower visual
   async function handleCollect() {
     if (collecting || uncollectedEarnings <= 0) return
     setCollecting(true)
@@ -104,14 +128,16 @@ export default function Dashboard() {
     setCollecting(false)
   }
 
+  // Prevents rendering until user profile is fully hydrated
   if (!user) return <DashboardSkeleton />
 
+  // ── Derived Economics ──
   const passiveIncome   = businesses.reduce((s, b) => s + parseFloat(b.revenue_per_minute || 0), 0)
   const businessesValue = businesses.reduce((s, b) => s + parseFloat(b.upgrade_cost || 0), 0)
   const netWorth        = parseFloat(user.cash || 0) + businessesValue
-
   const xpProgress      = (user.xp || 0) / (user.xpToNextLevel || 100000)
 
+  // ── Tier Calculation ──
   const tierIdx         = [...TIERS].reverse().findIndex(t => passiveIncome >= t.min)
   const currentTier     = TIERS[TIERS.length - 1 - tierIdx] || TIERS[0]
   const nextTier        = TIERS[TIERS.length - tierIdx] || null
@@ -124,12 +150,12 @@ export default function Dashboard() {
 
   return (
     <div className="relative px-4 pt-5 pb-4 space-y-3">
+      {/* Interactive coin burst for earnings collection */}
       <CoinShower active={showCoins} onComplete={() => setShowCoins(false)} />
 
-      {/* ── HEADER ── */}
+      {/* ── HEADER OVERVIEW ── */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-3">
-          {/* Game logo mark */}
           <div
             className="w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0"
             style={{
@@ -144,13 +170,14 @@ export default function Dashboard() {
               style={{ color: 'var(--col-text-3)' }}>
               {greeting}
             </p>
-            <h1 className="text-xl font-black tracking-tight"
+            <h1 className="text-2xl font-black tracking-tight"
               style={{ color: 'var(--col-text-1)' }}>
               {user?.username || 'Tycoon'} <Zap size={14} style={{ color: 'var(--col-gold)', display: 'inline', verticalAlign: 'middle' }} />
             </h1>
           </div>
         </div>
-        {/* Avatar + level badge */}
+        
+        {/* Avatar + Level Badge */}
         <div className="relative">
           <div
             className="w-11 h-11 rounded-2xl flex items-center justify-center text-base font-black"
@@ -207,7 +234,7 @@ export default function Dashboard() {
               <AnimatedNumber value={netWorth} prefix="$" />
             </p>
 
-            {/* XP Bar */}
+            {/* XP Progress Bar */}
             <div className="mt-4 mb-2">
               <div className="flex justify-between mb-1.5">
                 <span className="text-[10px] font-bold tracking-widest uppercase"
@@ -221,7 +248,7 @@ export default function Dashboard() {
               <ProgressBar value={xpProgress} color="xp" chunky />
             </div>
 
-            {/* Stats row */}
+            {/* Mini Stats Row */}
             <div className="grid grid-cols-3 gap-3 mt-4">
               {[
                 { label: 'Cash', value: user.cash || 0, color: '#3DD68C', prefix: '$' },
@@ -251,7 +278,7 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ── PASSIVE INCOME TIER ── */}
+      {/* ── PASSIVE INCOME TIER BOARD ── */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -282,7 +309,7 @@ export default function Dashboard() {
                 <AnimatedNumber value={passiveIncome} prefix="$" suffix="/min" />
               </p>
             </div>
-            {/* Tier badge */}
+            {/* Active Tier Pill */}
             <div
               className="flex-shrink-0 px-3 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase"
               style={{
@@ -309,11 +336,16 @@ export default function Dashboard() {
         </Card>
       </motion.div>
 
-      {/* ── FEATURE HUB ── */}
+      {/* ── CENTRAL FEATURE NAVIGATION ── */}
+      {/* Quick links to deeper game systems */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
         <p className="text-[10px] font-black tracking-widest uppercase mb-2" style={{ color: 'var(--col-text-3)' }}>
           Empire Hub
         </p>
+        {/* 
+          Feature Hub grid: 4-column on all phone sizes.
+          Each item has generous vertical padding to ensure a minimum ~52px tap height.
+        */}
         <div className="grid grid-cols-4 gap-2">
           {[
             { to: '/crypto',          icon: Bitcoin,        label: 'Crypto',    color: '#B56EFF' },
@@ -328,11 +360,11 @@ export default function Dashboard() {
             <Link
               key={to}
               to={to}
-              className="flex flex-col items-center gap-1.5 py-3 rounded-2xl"
+              className="flex flex-col items-center gap-2 py-3.5 rounded-2xl active:scale-95 transition-transform"
               style={{ background: `${color}10`, border: `1px solid ${color}28`, textDecoration: 'none' }}
             >
-              <Icon size={18} strokeWidth={1.8} style={{ color }} />
-              <span className="text-[9px] font-black tracking-widest uppercase" style={{ color }}>
+              <Icon size={20} strokeWidth={1.8} style={{ color }} />
+              <span className="text-[10px] font-black tracking-wider uppercase" style={{ color }}>
                 {label}
               </span>
             </Link>
@@ -340,7 +372,7 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ── COLLECT BUTTON ── */}
+      {/* ── EARNINGS COLLECTION CTA ── */}
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -377,7 +409,7 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ── ALERTS ── */}
+      {/* ── NOTIFICATIONS / ALERTS ── */}
       {alerts.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
           <p className="text-[10px] font-black tracking-widest uppercase mb-2"
@@ -395,6 +427,9 @@ export default function Dashboard() {
   )
 }
 
+/**
+ * Standardized card for rendering system notifications (market crashes, raids, etc.)
+ */
 function AlertCard({ alert }) {
   const isPositive = alert.color === 'positive'
   const color = isPositive ? 'var(--col-green)' : alert.color === 'negative' ? 'var(--col-red)' : 'var(--col-blue)'

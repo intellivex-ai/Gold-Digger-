@@ -1,3 +1,12 @@
+/**
+ * Leaderboard.jsx
+ * 
+ * Displays the global rankings of all players based on their total Net Worth.
+ * Features a visual "Top 3 Podium" with custom styling for the leading players,
+ * followed by a scrollable list of the entire server population.
+ * Automatically highlights the current user's position in the list.
+ */
+
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Crown, TrendingUp, Trophy, Medal, Flame } from 'lucide-react'
@@ -5,6 +14,7 @@ import useSocialStore from '../stores/useSocialStore'
 import useUserStore from '../stores/useUserStore'
 import { LeaderboardSkeleton } from '../components/SkeletonLoader'
 
+// Formats net worth into readable strings (e.g., $1.5B, $500M)
 const fmtWorth = (n) => {
   if (!n) return '$0'
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`
@@ -13,7 +23,7 @@ const fmtWorth = (n) => {
   return `$${n}`
 }
 
-// Top-3 podium config
+// Configuration for the visual Top 3 podium display
 const PODIUM = [
   { pos: 1, height: 80, color: '#C0C0C0', icon: '🥈', label: '2ND', glow: 'rgba(192,192,192,0.3)' },
   { pos: 0, height: 110, color: '#F5C842', icon: '👑', label: '1ST', glow: 'rgba(245,200,66,0.5)' },
@@ -26,11 +36,12 @@ export default function Leaderboard() {
   const isLoadingLeaderboard = useSocialStore((s) => s.isLoadingLeaderboard)
   const currentUserId        = useUserStore((s) => s.user?.id)
 
+  // Fetch initial data and subscribe to live rank changes
   useEffect(() => {
     fetchLeaderboard()
     const unsubscribe = useSocialStore.getState().subscribeToLeaderboard()
     return () => unsubscribe()
-  }, [])
+  }, [fetchLeaderboard])
 
   if (isLoadingLeaderboard && leaderboard.length === 0) return <LeaderboardSkeleton />
 
@@ -38,6 +49,7 @@ export default function Leaderboard() {
     <div className="px-4 pt-4 pb-8">
 
       {/* ── TOP 3 PODIUM ── */}
+      {/* Only render the podium if we have at least 3 players to fill it */}
       {leaderboard.length >= 3 && (
         <div className="flex items-end justify-center gap-4 mb-6 pt-2">
           {PODIUM.map(({ pos, height, color, icon, label, glow }) => {
@@ -50,13 +62,14 @@ export default function Leaderboard() {
                 key={player.id || pos}
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
+                // Staggered animation: 1st place appears first, then 2nd, then 3rd
                 transition={{ delay: pos === 0 ? 0 : pos === 1 ? 0.1 : 0.2, type: 'spring', stiffness: 250 }}
                 className="flex flex-col items-center w-24"
               >
-                {/* Rank icon */}
+                {/* Rank Icon */}
                 <span style={{ fontSize: 20 }} className="mb-1">{icon}</span>
 
-                {/* Avatar */}
+                {/* Avatar Box with continuous pulse for 1st place */}
                 <motion.div
                   animate={isTop ? { boxShadow: [`0 0 16px ${glow}`, `0 0 32px ${glow}`, `0 0 16px ${glow}`] } : {}}
                   transition={{ duration: 2, repeat: Infinity }}
@@ -72,6 +85,7 @@ export default function Leaderboard() {
                   {player.username?.slice(0, 2).toUpperCase()}
                 </motion.div>
 
+                {/* Player Name & Worth */}
                 <p className="text-[10px] font-black truncate w-full text-center"
                   style={{ color: 'var(--col-text-1)' }}>
                   {player.username}
@@ -80,7 +94,7 @@ export default function Leaderboard() {
                   {fmtWorth(player.netWorth)}
                 </p>
 
-                {/* Podium block */}
+                {/* Physical Podium Block */}
                 <div
                   className="w-full mt-2 rounded-t-xl flex items-end justify-center pb-1"
                   style={{
@@ -99,7 +113,7 @@ export default function Leaderboard() {
         </div>
       )}
 
-      {/* Divider */}
+      {/* ── Visual Divider ── */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
         <span className="text-[10px] font-black tracking-widest uppercase"
@@ -109,10 +123,11 @@ export default function Leaderboard() {
         <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
       </div>
 
-      {/* ── FULL LIST ── */}
+      {/* ── FULL LIST VIEW ── */}
       <div className="space-y-1.5">
         {leaderboard.map((player, i) => {
           const isMe = player.id === currentUserId
+          // Assign metallic colors to top 3 ranks, default text color for the rest
           const rankColor = player.rank === 1 ? '#F5C842' : player.rank === 2 ? '#C0C0C0' : player.rank === 3 ? '#CD7F32' : 'var(--col-text-3)'
 
           return (
@@ -120,7 +135,7 @@ export default function Leaderboard() {
               key={player.rank || i}
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: Math.min(i * 0.03, 0.5) }}
+              transition={{ delay: Math.min(i * 0.03, 0.5) }} // Cap cascade delay at 0.5s for long lists
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
               style={{
                 background: isMe
@@ -132,7 +147,7 @@ export default function Leaderboard() {
                 boxShadow: isMe ? '0 0 12px rgba(91,156,246,0.15)' : 'none',
               }}
             >
-              {/* Rank */}
+              {/* Numeric Rank or Medal Icon */}
               <div className="w-7 flex items-center justify-center flex-shrink-0">
                 {player.rank === 1
                   ? <Crown size={16} color="#F5C842" fill="#F5C842" style={{ filter: 'drop-shadow(0 0 4px rgba(245,200,66,0.7))' }} />
@@ -146,10 +161,11 @@ export default function Leaderboard() {
                 }
               </div>
 
-              {/* Avatar */}
+              {/* Player Avatar */}
               <div
                 className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black flex-shrink-0"
                 style={{
+                  // Current user gets a special gradient avatar
                   background: isMe
                     ? 'linear-gradient(135deg, #5B9CF6, #B56EFF)'
                     : 'rgba(255,255,255,0.06)',
@@ -160,7 +176,7 @@ export default function Leaderboard() {
                 {player.username?.slice(0, 2).toUpperCase()}
               </div>
 
-              {/* Info */}
+              {/* Player Identity & Guild */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-black truncate"
@@ -175,7 +191,7 @@ export default function Leaderboard() {
                 </p>
               </div>
 
-              {/* Net worth */}
+              {/* Net Worth Summary */}
               <div className="text-right flex-shrink-0">
                 <p className="text-sm font-black nums"
                   style={{ color: rankColor, textShadow: player.rank <= 3 ? `0 0 8px ${rankColor}60` : 'none' }}>

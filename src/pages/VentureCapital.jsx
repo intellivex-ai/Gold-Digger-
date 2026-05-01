@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, TrendingUp, DollarSign, BarChart2, CheckCircle2, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import useUserStore from '../stores/useUserStore'
@@ -45,16 +46,16 @@ const STARTUPS = [
 const TIER_LABEL = ['', 'Seed', 'Series A', 'Series B', 'Series C', 'IPO Track']
 
 function InvestSheet({ startup, onClose, onInvest }) {
-  const [amount, setAmount] = useState(String(startup.min_invest))
+  const [amount, setAmount] = useState(String(startup?.min_invest || 0))
   const [status, setStatus] = useState(null)
   const balance = useUserStore((s) => parseFloat(s.user?.balance || 0))
   const val = parseFloat(amount) || 0
-  const canInvest = val >= startup.min_invest && val <= balance
+  const canInvest = val >= (startup?.min_invest || 0) && val <= balance
 
   const handleInvest = async () => {
     setStatus('loading')
     try {
-      await onInvest(startup.id, val)
+      await onInvest(startup?.id, val)
       setStatus('success')
       setTimeout(onClose, 900)
     } catch {
@@ -63,21 +64,24 @@ function InvestSheet({ startup, onClose, onInvest }) {
     }
   }
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-end"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={onClose}
-    >
+  return createPortal(
+    <AnimatePresence>
+      {startup && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0"
+            style={{ background: 'rgba(0,0,0,0.7)' }}
+            onClick={onClose}
+          />
       <motion.div
-        initial={{ y: 80, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 80, opacity: 0 }}
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-        className="w-full rounded-t-3xl p-6 pb-10 space-y-5"
+        className="relative z-10 w-full max-w-[430px] rounded-t-3xl p-6 pb-10 space-y-5 overflow-y-auto overscroll-contain"
         style={{ background: '#151622', border: '1px solid rgba(255,255,255,0.08)' }}
         onClick={e => e.stopPropagation()}
       >
@@ -130,7 +134,10 @@ function InvestSheet({ startup, onClose, onInvest }) {
           {status === 'loading' ? 'Investing...' : status === 'success' ? 'Committed' : 'Commit Investment'}
         </motion.button>
       </motion.div>
-    </motion.div>
+      </div>
+      )}
+    </AnimatePresence>,
+    document.body
   )
 }
 
@@ -268,13 +275,11 @@ export default function VentureCapital() {
         </Card>
       </div>
 
-      {selected && (
-        <InvestSheet
-          startup={selected}
-          onClose={() => setSelected(null)}
-          onInvest={handleInvest}
-        />
-      )}
+      <InvestSheet
+        startup={selected}
+        onClose={() => setSelected(null)}
+        onInvest={handleInvest}
+      />
     </div>
   )
 }

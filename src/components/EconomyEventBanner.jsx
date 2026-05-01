@@ -1,8 +1,17 @@
+/**
+ * EconomyEventBanner.jsx
+ * 
+ * A live ticker that sits at the top of the app, underneath the native phone notch.
+ * It displays global "breaking news" events (like a Tech Boom or Market Crash)
+ * that affect gameplay.
+ */
+
 import { useEffect, Component } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Zap, TrendingUp, TrendingDown, AlertTriangle, Wind, Coins } from 'lucide-react'
 import useEconomyStore from '../stores/useEconomyStore'
 
+// Visual styling for different types of events
 const EVENT_CONFIG = {
   boom:     { icon: TrendingUp,    color: '#3DD68C', bg: 'rgba(61,214,140,0.12)',   label: 'BOOM'     },
   crash:    { icon: TrendingDown,  color: '#FF6B6B', bg: 'rgba(255,107,107,0.12)',  label: 'CRASH'    },
@@ -12,9 +21,12 @@ const EVENT_CONFIG = {
   tax:      { icon: Wind,          color: '#8892B0', bg: 'rgba(136,146,176,0.12)',  label: 'TAX'      },
 }
 
+/** Individual visual tag for a specific event */
 function EventPill({ event }) {
   const cfg = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.boom
   const Icon = cfg.icon
+  
+  // Calculate remaining hours
   const timeLeft = Math.max(0, (new Date(event.end_at) - Date.now()) / 3600000)
 
   return (
@@ -45,11 +57,13 @@ function BannerInner() {
 
   useEffect(() => {
     fetchEvents()
-    // subscribeToEvents is idempotent — safe to call even in StrictMode
+    // Start listening for live admin changes.
+    // The store uses a Singleton pattern, so this is safe even in React StrictMode.
     const unsub = subscribeToEvents()
     return unsub
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // If there are no active global events, hide the banner entirely to save screen space
   if (!events.length) return null
 
   return (
@@ -63,7 +77,7 @@ function BannerInner() {
         msOverflowStyle: 'none',
       }}
     >
-      {/* Pulse live indicator */}
+      {/* Pulse live indicator (Red blinking dot) */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <motion.div
           animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
@@ -76,10 +90,12 @@ function BannerInner() {
         </span>
       </div>
 
+      {/* List of active events */}
       <div
         className="flex gap-2"
         style={{ overflow: 'hidden', overflowX: 'auto', scrollbarWidth: 'none' }}
       >
+        {/* AnimatePresence makes pills fade out smoothly when they expire */}
         <AnimatePresence>
           {events.map(e => <EventPill key={e.id} event={e} />)}
         </AnimatePresence>
@@ -88,7 +104,11 @@ function BannerInner() {
   )
 }
 
-/** Class-based error boundary so a crash never propagates to Layout */
+/** 
+ * Class-based error boundary wrapper.
+ * Because this sits outside the main page routing, if this crashes, we don't
+ * want it bringing down the whole app. We just swallow the error and hide it.
+ */
 class EconomyBannerBoundary extends Component {
   state = { crashed: false }
 

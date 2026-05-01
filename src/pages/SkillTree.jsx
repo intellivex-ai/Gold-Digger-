@@ -1,3 +1,11 @@
+/**
+ * SkillTree.jsx
+ * 
+ * Provides an interface for players to spend "Talent Points" on permanent
+ * passive bonuses across various strategic trees (Wolf, Tycoon, Shadow, Kingpin).
+ * Handles the logic for sequential node unlocking and dynamic visual state updates.
+ */
+
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Lock, Check, ChevronRight, Zap, TrendingUp, Eye, Shield } from 'lucide-react'
@@ -5,8 +13,9 @@ import { useNavigate } from 'react-router-dom'
 import useSkillStore from '../stores/useSkillStore'
 import useUserStore from '../stores/useUserStore'
 import Card from '../components/Card'
-import ProgressBar from '../components/ProgressBar'
 
+// Hardcoded static configuration for the available skill trees.
+// In a full production app, this might be fetched from a DB, but static is fine for fixed game design.
 const TREES = [
   {
     id: 'wolf',
@@ -59,17 +68,22 @@ const TREES = [
 ]
 
 export default function SkillTree() {
-  const navigate      = useNavigate()
+  const navigate = useNavigate()
+  
+  // Store bindings
   const { unlockedSkills, unlockSkill, fetchSkills } = useSkillStore()
-  const talentPoints  = useUserStore((s) => parseInt(s.user?.talent_points || 0))
+  const talentPoints = useUserStore((s) => parseInt(s.user?.talent_points || 0))
 
-  useEffect(() => { fetchSkills?.() }, [])
+  // Hydrate unlocked skill array on mount
+  useEffect(() => { 
+    fetchSkills?.() 
+  }, [fetchSkills])
 
   return (
     <div className="page-scroll">
       <div className="px-4 pt-5 pb-24 space-y-4">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex items-center gap-3">
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -83,6 +97,8 @@ export default function SkillTree() {
             <h1 className="font-black text-xl" style={{ color: 'var(--col-text-1)' }}>Skill Tree</h1>
             <p className="text-xs" style={{ color: 'var(--col-text-3)' }}>Unlock permanent bonuses</p>
           </div>
+          
+          {/* Active Talent Points Badge */}
           <div
             className="ml-auto px-3 py-1.5 rounded-xl flex items-center gap-1.5"
             style={{ background: 'rgba(245,200,66,0.12)', border: '1px solid rgba(245,200,66,0.25)' }}
@@ -92,12 +108,12 @@ export default function SkillTree() {
           </div>
         </div>
 
-        {/* Trees */}
+        {/* ── Skill Trees Iteration ── */}
         {TREES.map(tree => {
           const Icon = tree.icon
           return (
             <Card key={tree.id}>
-              {/* Tree header */}
+              {/* Tree Header */}
               <div className="flex items-center gap-3 mb-4">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -111,10 +127,12 @@ export default function SkillTree() {
                 </div>
               </div>
 
-              {/* Skills */}
+              {/* Skills Container */}
               <div className="space-y-2">
                 {tree.skills.map((skill, idx) => {
+                  // Determine dynamic state for sequential unlocking logic
                   const isUnlocked = unlockedSkills?.includes(skill.id)
+                  // Prev node must be unlocked to unlock current node
                   const prevUnlocked = idx === 0 || unlockedSkills?.includes(tree.skills[idx - 1]?.id)
                   const canUnlock = !isUnlocked && prevUnlocked && talentPoints >= skill.cost
 
@@ -123,18 +141,20 @@ export default function SkillTree() {
                       key={skill.id}
                       whileTap={canUnlock ? { scale: 0.98 } : {}}
                       onClick={() => canUnlock && unlockSkill(skill.id, skill.cost)}
-                      className="flex items-center gap-3 p-3 rounded-xl"
+                      className="flex items-center gap-3 p-3 rounded-xl transition-all"
                       style={{
                         background: isUnlocked
                           ? `${tree.color}10`
                           : 'rgba(255,255,255,0.03)',
                         border: `1px solid ${isUnlocked ? tree.color + '30' : 'rgba(255,255,255,0.06)'}`,
                         cursor: canUnlock ? 'pointer' : 'default',
+                        // Dim out nodes that are completely locked due to prerequisite not met
                         opacity: (!isUnlocked && !prevUnlocked) ? 0.4 : 1,
                       }}
                     >
+                      {/* Left Icon (Lock / Arrow / Check) */}
                       <div
-                        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
                         style={{
                           background: isUnlocked ? `${tree.color}22` : 'rgba(255,255,255,0.05)',
                         }}
@@ -146,15 +166,19 @@ export default function SkillTree() {
                           : <ChevronRight size={13} style={{ color: 'var(--col-text-3)' }} />
                         }
                       </div>
+                      
+                      {/* Skill Text */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black" style={{ color: isUnlocked ? tree.color : 'var(--col-text-1)' }}>
+                        <p className="text-sm font-black transition-colors" style={{ color: isUnlocked ? tree.color : 'var(--col-text-1)' }}>
                           {skill.name}
                         </p>
                         <p className="text-xs" style={{ color: 'var(--col-text-3)' }}>{skill.desc}</p>
                       </div>
+                      
+                      {/* Cost Badge (Hidden if already unlocked) */}
                       {!isUnlocked && (
                         <div
-                          className="px-2 py-1 rounded-lg flex items-center gap-1"
+                          className="px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
                           style={{
                             background: canUnlock ? 'rgba(245,200,66,0.12)' : 'rgba(255,255,255,0.04)',
                             border: `1px solid ${canUnlock ? 'rgba(245,200,66,0.25)' : 'rgba(255,255,255,0.06)'}`,

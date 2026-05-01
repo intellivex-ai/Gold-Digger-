@@ -1,3 +1,11 @@
+/**
+ * OffshoreBankModal.jsx
+ * 
+ * An interactive modal that allows players to hide their cash from hostile PVP takeovers.
+ * The tradeoff is that offshore storage incurs a daily percentage fee.
+ * Includes math for calculating safe limits and deposit/withdraw state logic.
+ */
+
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Shield, X, ArrowDownToLine, ArrowUpFromLine, Lock, DollarSign, AlertTriangle } from 'lucide-react'
@@ -5,19 +13,24 @@ import useUserStore from '../stores/useUserStore'
 import { supabase } from '../lib/supabase'
 import sounds from '../lib/soundManager'
 
+// Global configuration variable
 const DAILY_FEE_RATE = 0.005  // 0.5% per day
 
 export default function OffshoreBankModal({ onClose }) {
   const user = useUserStore(s => s.user)
   const updateCash = useUserStore(s => s.updateCash)
-  const [tab, setTab] = useState('deposit')
+  
+  const [tab, setTab] = useState('deposit') // 'deposit' or 'withdraw'
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
 
-  // Offshore balance stored in profile (offshore_balance column)
+  // ── Financial Data Parsing ──
+  // Extract and default to 0 to prevent NaN errors in the UI
   const offshoreBalance = parseFloat(user?.offshore_balance || 0)
   const cashBalance = parseFloat(user?.cash || 0)
+  
+  // Predict the daily drain based on current balance
   const dailyFee = offshoreBalance * DAILY_FEE_RATE
 
   const handleAction = async () => {
@@ -28,6 +41,7 @@ export default function OffshoreBankModal({ onClose }) {
 
     const isDeposit = tab === 'deposit'
 
+    // ── Input Validation ──
     if (isDeposit && val > cashBalance) {
       setResult({ success: false, message: 'Insufficient cash.' })
       setLoading(false); return
@@ -37,17 +51,21 @@ export default function OffshoreBankModal({ onClose }) {
       setLoading(false); return
     }
 
+    // Determine new state values locally
     const newCash = isDeposit ? cashBalance - val : cashBalance + val
     const newOffshore = isDeposit ? offshoreBalance + val : offshoreBalance - val
 
+    // ── Database Update ──
     try {
       await supabase.from('profiles')
         .update({ cash: newCash, offshore_balance: newOffshore })
         .eq('id', user.id)
-    } catch { /* demo */ }
+    } catch { /* Suppress errors in demo mode */ }
 
+    // ── Local Store Update ──
     updateCash(isDeposit ? -val : val)
-    // Update offshore balance in store (simplified — normally via realtime)
+    
+    // Manual state override to reflect the new offshore balance immediately
     useUserStore.setState(s => ({
       user: { ...s.user, offshore_balance: newOffshore, cash: newCash }
     }))
@@ -67,7 +85,7 @@ export default function OffshoreBankModal({ onClose }) {
       <motion.div
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        onClick={e => e.stopPropagation()}
+        onClick={e => e.stopPropagation()} // Prevent clicking inner modal from closing it
         className="w-full rounded-t-3xl p-6 pb-10"
         style={{
           background: 'linear-gradient(180deg, #0A1020 0%, #0E0F18 100%)',
@@ -75,6 +93,7 @@ export default function OffshoreBankModal({ onClose }) {
           boxShadow: '0 -8px 40px rgba(91,156,246,0.12)',
         }}
       >
+        {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
@@ -92,12 +111,15 @@ export default function OffshoreBankModal({ onClose }) {
           </button>
         </div>
 
-        {/* Balance cards */}
+        {/* ── Balance Summary Cards ── */}
         <div className="grid grid-cols-2 gap-3 mb-5">
+          {/* Main Wallet */}
           <div className="rounded-2xl p-4" style={{ background: 'rgba(61,214,140,0.08)', border: '1px solid rgba(61,214,140,0.2)' }}>
             <div className="text-[10px] font-black mb-1" style={{ color: 'var(--col-text-3)' }}>CASH BALANCE</div>
             <div className="text-lg font-black" style={{ color: '#3DD68C' }}>${cashBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
           </div>
+          
+          {/* Offshore Vault */}
           <div className="rounded-2xl p-4" style={{ background: 'rgba(91,156,246,0.08)', border: '1px solid rgba(91,156,246,0.2)' }}>
             <div className="text-[10px] font-black mb-1 flex items-center gap-1" style={{ color: 'var(--col-text-3)' }}>
               <Lock size={9} /> OFFSHORE
@@ -111,7 +133,7 @@ export default function OffshoreBankModal({ onClose }) {
           </div>
         </div>
 
-        {/* Warning */}
+        {/* ── Rules / Warning Banner ── */}
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl mb-5"
           style={{ background: 'rgba(255,159,67,0.08)', border: '1px solid rgba(255,159,67,0.2)' }}>
           <AlertTriangle size={13} style={{ color: '#FF9F43', marginTop: 1, flexShrink: 0 }} />
@@ -120,7 +142,7 @@ export default function OffshoreBankModal({ onClose }) {
           </p>
         </div>
 
-        {/* Tabs */}
+        {/* ── Mode Selection Tabs ── */}
         <div className="grid grid-cols-2 gap-2 p-1 rounded-xl mb-5" style={{ background: 'rgba(255,255,255,0.04)' }}>
           {['deposit', 'withdraw'].map(t => (
             <button key={t} onClick={() => { setTab(t); setResult(null) }}
@@ -135,6 +157,7 @@ export default function OffshoreBankModal({ onClose }) {
           ))}
         </div>
 
+        {/* ── Amount Input Form ── */}
         <div className="relative mb-5">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-lg" style={{ color: 'var(--col-text-3)' }}>$</span>
           <input
@@ -145,9 +168,10 @@ export default function OffshoreBankModal({ onClose }) {
           />
         </div>
 
-        {/* Quick amounts */}
+        {/* ── Quick Action Percentages ── */}
         <div className="flex gap-2 mb-5">
           {[10, 25, 50, 100].map(pct => {
+            // Determine max based on selected mode
             const max = tab === 'deposit' ? cashBalance : offshoreBalance
             const val = Math.floor(max * pct / 100)
             return (
@@ -160,6 +184,7 @@ export default function OffshoreBankModal({ onClose }) {
           })}
         </div>
 
+        {/* ── Result Feedback ── */}
         <AnimatePresence>
           {result && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -177,12 +202,14 @@ export default function OffshoreBankModal({ onClose }) {
           )}
         </AnimatePresence>
 
+        {/* ── Final Action Button ── */}
         <motion.button
           whileTap={{ scale: 0.96, y: 2 }}
           onClick={handleAction}
           disabled={loading}
           className="w-full py-4 rounded-2xl font-black text-base"
           style={{
+            // Blue for deposit, Green for withdraw
             background: tab === 'deposit'
               ? 'linear-gradient(180deg, #5B9CF6 0%, #3A7BD5 100%)'
               : 'linear-gradient(180deg, #3DD68C 0%, #28A868 100%)',

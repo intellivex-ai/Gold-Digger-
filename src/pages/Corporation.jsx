@@ -1,3 +1,10 @@
+/**
+ * Corporation.jsx
+ * 
+ * The main social/guild interface where players can create, join, and manage corporations.
+ * Features include a shared treasury bank, member ranking, and initiating Corporate Warfare.
+ */
+
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Users, Building2, Wallet, UserPlus, ArrowDownToLine, Shield } from 'lucide-react'
@@ -11,6 +18,7 @@ import { CardSkeleton } from '../components/SkeletonLoader'
 import { supabase } from '../lib/supabase'
 import CorporateWar from '../components/CorporateWar'
 
+// Quick helper to abbreviate large currency numbers
 const fmtMoney = (n) => {
   n = parseFloat(n || 0)
   if (n >= 1e9) return `$${(n/1e9).toFixed(1)}B`
@@ -24,15 +32,18 @@ export default function Corporation() {
   const fetchCorporation = useSocialStore((s) => s.fetchCorporation)
   const user             = useUserStore((s) => s.user)
 
+  // ── Auto-Subscribe to Corp Data ──
   useEffect(() => {
     const corpId = user?.corporation_id || user?.corporationId
     if (corpId) {
       fetchCorporation(corpId)
+      // Connect to real-time channel to listen for member joins/deposits
       const unsubscribe = useSocialStore.getState().subscribeToCorporation(corpId)
       return () => unsubscribe()
     }
-  }, [user?.corporation_id, user?.corporationId])
+  }, [user?.corporation_id, user?.corporationId, fetchCorporation])
 
+  // Local UI State
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [createForm, setCreateForm]         = useState({ name: '', tag: '' })
   const [loading, setLoading]               = useState(false)
@@ -41,6 +52,7 @@ export default function Corporation() {
   const [availableCorps, setAvailableCorps] = useState([])
   const [loadingJoin, setLoadingJoin]       = useState(false)
 
+  // ── Recruitment Actions ──
   const handleFind = async () => {
     sounds.tap?.()
     setShowFindList(true)
@@ -53,21 +65,31 @@ export default function Corporation() {
     setLoadingJoin(true)
     const result = await useSocialStore.getState().joinCorporation(corpId)
     setLoadingJoin(false)
-    if (result.success) { sounds.success?.(); window.location.reload() }
-    else { sounds.error?.(); alert(result.message || 'Failed to join') }
+    if (result.success) { 
+      sounds.success?.()
+      window.location.reload() // Force reload to apply new corp state
+    } else { 
+      sounds.error?.()
+      alert(result.message || 'Failed to join') 
+    }
   }
 
   const handleCreate = async (e) => {
     e.preventDefault(); setLoading(true); setErrorMsg('')
     const result = await useSocialStore.getState().createCorporation(createForm.name, createForm.tag)
     setLoading(false)
-    if (result.success) sounds.success?.()
-    else { sounds.error?.(); setErrorMsg(result.message || 'Failed to create') }
+    if (result.success) {
+      sounds.success?.()
+    } else { 
+      sounds.error?.()
+      setErrorMsg(result.message || 'Failed to create') 
+    }
   }
 
-  // ── No corporation ─────────────────────────────────────────────
+  // ── UNAFFILIATED VIEW ──────────────────────────────────────────
   if (!corp) return (
     <div className="px-4 pt-5 space-y-4">
+      {/* Empty State Banner */}
       <div className="text-center py-6">
         <div
           className="w-20 h-20 rounded-3xl mx-auto mb-4 flex items-center justify-center"
@@ -88,6 +110,7 @@ export default function Corporation() {
       </div>
 
       {showFindList ? (
+        // Search view
         <Card>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-black" style={{ color: 'var(--col-text-1)' }}>
@@ -131,6 +154,7 @@ export default function Corporation() {
           </div>
         </Card>
       ) : !showCreateForm ? (
+        // Action Buttons
         <div className="space-y-3">
           <motion.button className="btn-game-blue w-full" style={{ paddingTop: 14, paddingBottom: 14 }}
             whileTap={{ y: 2, scale: 0.98 }} onClick={handleFind}>
@@ -143,6 +167,7 @@ export default function Corporation() {
           </motion.button>
         </div>
       ) : (
+        // Creation Form
         <Card>
           <h3 className="text-sm font-black mb-4" style={{ color: 'var(--col-text-1)' }}>
             Found a New Corporation
@@ -156,7 +181,9 @@ export default function Corporation() {
               value={createForm.tag} maxLength={4}
               onChange={(e) => setCreateForm({ ...createForm, tag: e.target.value.toUpperCase() })}
               required className="input-dark uppercase" />
+            
             {errorMsg && <p className="text-xs font-bold" style={{ color: 'var(--col-red)' }}>{errorMsg}</p>}
+            
             <div className="flex gap-2">
               <Button type="button" variant="ghost" size="md" className="flex-1"
                 onClick={() => setShowCreateForm(false)}>Cancel</Button>
@@ -173,22 +200,29 @@ export default function Corporation() {
     </div>
   )
 
-  // ── Has corporation ────────────────────────────────────────────
+  // ── AFFILIATED VIEW (Has Corporation) ───────────────────────────
   const members         = corp.members || []
+  // Find highest contribution to calculate relative progress bar widths
   const topContribution = Math.max(...members.map((m) => m.contribution || 0), 1)
   const bankBalance     = parseFloat(corp.bank || corp.bankBalance || 0)
   const membersCount    = corp.membersCount || members.length
   const membersMax      = corp.membersMax || corp.member_cap || 20
 
+  // ── Corp Actions ──
   const handleDeposit = async () => {
     sounds.tap?.()
     const amountStr = window.prompt('Deposit amount ($):')
     if (!amountStr) return
     const amount = parseFloat(amountStr)
     if (isNaN(amount) || amount <= 0) return alert('Invalid amount')
+    
     const result = await useSocialStore.getState().depositToCorporation(corp.id, amount)
-    if (result.success) sounds.success?.()
-    else { sounds.error?.(); alert(result.message || 'Deposit failed') }
+    if (result.success) {
+      sounds.success?.()
+    } else { 
+      sounds.error?.()
+      alert(result.message || 'Deposit failed') 
+    }
   }
 
   const handleInvite = async () => {
@@ -197,9 +231,15 @@ export default function Corporation() {
     if (!targetUsername) return
     const { data, error } = await supabase.from('profiles').select('id').eq('username', targetUsername).single()
     if (error || !data) { sounds.error?.(); return alert('User not found') }
+    
     const result = await useSocialStore.getState().inviteMember(corp.id, data.id)
-    if (result.success) { sounds.success?.(); alert('Invitation sent!') }
-    else { sounds.error?.(); alert(result.message || 'Failed to send invite') }
+    if (result.success) { 
+      sounds.success?.()
+      alert('Invitation sent!') 
+    } else { 
+      sounds.error?.()
+      alert(result.message || 'Failed to send invite') 
+    }
   }
 
   return (
@@ -331,6 +371,7 @@ export default function Corporation() {
                     <p className="text-[9px]" style={{ color: 'var(--col-text-3)' }}>Contributed</p>
                   </div>
                 </div>
+                {/* Visual indicator of member's relative financial impact on the corp */}
                 <ProgressBar value={contribution / topContribution} color="blue" />
               </motion.div>
             )
@@ -338,13 +379,13 @@ export default function Corporation() {
         </div>
       </Card>
 
-      {/* Corporate Warfare */}
+      {/* ── Corporate Warfare Hub ── */}
       <Card>
         <p className="text-[10px] font-black tracking-widest uppercase mb-4"
           style={{ color: 'var(--col-text-3)' }}>Corporate Warfare</p>
         <CorporateWar
           myCorp={corp}
-          rivalCorps={[]}
+          rivalCorps={[]} // Feature stub: Would fetch from Supabase in prod
         />
       </Card>
     </div>

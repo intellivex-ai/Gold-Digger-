@@ -1,3 +1,11 @@
+/**
+ * LoadingScreen.jsx
+ * 
+ * The main splash screen shown when the app first loads or when a critical module
+ * is being fetched. Uses a combination of Framer Motion springs and CSS 
+ * particle animations to provide a premium feel before the user enters the game.
+ */
+
 import { motion } from 'framer-motion'
 import logoSrc from '../assets/logo.svg'
 
@@ -6,13 +14,16 @@ export default function LoadingScreen() {
     <div
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center"
       style={{
+        // A complex radial gradient that mixes Gold and Blue subtle lighting 
+        // to match the game's color palette.
         background: `
           radial-gradient(ellipse 60% 50% at 50% 0%, rgba(245,200,66,0.12) 0%, transparent 60%),
           radial-gradient(ellipse 40% 40% at 80% 80%, rgba(91,156,246,0.10) 0%, transparent 60%),
           #08090D`,
       }}
     >
-      {/* Ambient particles */}
+      {/* ── Ambient Particles ── */}
+      {/* We map over an empty array of 6 items to generate 6 floating dots in the background */}
       {[...Array(6)].map((_, i) => (
         <motion.div
           key={i}
@@ -24,19 +35,20 @@ export default function LoadingScreen() {
             top: `${20 + (i % 3) * 20}%`,
             background: i % 2 === 0 ? 'rgba(245,200,66,0.6)' : 'rgba(91,156,246,0.6)',
           }}
+          // The particles float up and down slightly and pulse their opacity
           animate={{ y: [-8, 8, -8], opacity: [0.3, 0.8, 0.3] }}
           transition={{ duration: 2 + i * 0.4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
         />
       ))}
 
-      {/* ── GAME LOGO ── */}
+      {/* ── Game Logo Container ── */}
       <motion.div
         initial={{ scale: 0.5, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.6, type: 'spring', stiffness: 200, damping: 15 }}
         className="relative mb-6"
       >
-        {/* Pulsing glow halo */}
+        {/* Pulsing glow halo behind the logo */}
         <motion.div
           animate={{ scale: [1, 1.18, 1], opacity: [0.35, 0.65, 0.35] }}
           transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
@@ -44,7 +56,7 @@ export default function LoadingScreen() {
           style={{ background: 'rgba(245,200,66,0.38)' }}
         />
 
-        {/* Spinning logo */}
+        {/* Spinning 3D logo box */}
         <motion.div
           animate={{ rotateY: [0, 360] }}
           transition={{ duration: 3.5, repeat: Infinity, ease: 'linear' }}
@@ -58,7 +70,7 @@ export default function LoadingScreen() {
         </motion.div>
       </motion.div>
 
-      {/* Brand */}
+      {/* ── Brand Title ── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -80,7 +92,7 @@ export default function LoadingScreen() {
         </p>
       </motion.div>
 
-      {/* Loading bar */}
+      {/* ── Loading Progress Bar ── */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -88,6 +100,8 @@ export default function LoadingScreen() {
         className="w-56"
       >
         <div className="progress-track mb-2" style={{ height: 8 }}>
+          {/* Note: This is a "fake" progress bar visually. It just sweeps to 100% over 2 seconds. 
+              The actual app data loading happens concurrently. */}
           <motion.div
             className="progress-fill-gold"
             initial={{ width: '0%' }}

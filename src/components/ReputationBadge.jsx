@@ -1,5 +1,15 @@
+/**
+ * ReputationBadge.jsx
+ * 
+ * A visual indicator of a player's social ranking.
+ * Based on their "reputation score", they are placed into a tier (Legend, Elite, etc.)
+ * which defines the icon, color, and glowing effects of the badge.
+ */
+
 import { Shield, Star, Crown, Zap, Flame } from 'lucide-react'
 
+// The Tier logic. Array order matters: we find the FIRST tier where score >= min.
+// So highest tiers must be at the top.
 const TIERS = [
   {
     min: 90, label: 'LEGEND', icon: Crown,
@@ -34,6 +44,7 @@ const TIERS = [
 ]
 
 export default function ReputationBadge({ score = 0, large = false }) {
+  // Find the appropriate tier based on the score
   const tier = TIERS.find((t) => score >= t.min) || TIERS[TIERS.length - 1]
   const Icon = tier.icon
   const size = large ? 14 : 11
@@ -47,21 +58,26 @@ export default function ReputationBadge({ score = 0, large = false }) {
         border: `1px solid ${tier.border}`,
         boxShadow: tier.glow !== 'none'
           ? `0 0 12px ${tier.glow}, inset 0 1px 0 rgba(255,255,255,0.08)`
-          : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+          : 'inset 0 1px 0 rgba(255,255,255,0.06)', // Fallback for newcomer (no glow)
       }}
     >
+      {/* Dynamic Lucide Icon */}
       <Icon
         size={size}
         style={{ color: tier.color, filter: `drop-shadow(0 0 4px ${tier.glow})` }}
         fill={tier.color}
         fillOpacity={0.5}
       />
+      
+      {/* Tier Label (e.g. ELITE) */}
       <span
         className={`font-black tracking-widest ${large ? 'text-xs' : 'text-[10px]'}`}
         style={{ color: tier.color, textShadow: tier.textShadow }}
       >
         {tier.label}
       </span>
+      
+      {/* Exact Score Number */}
       <span
         className={`font-bold ${large ? 'text-xs' : 'text-[10px]'}`}
         style={{ color: tier.color, opacity: 0.7 }}

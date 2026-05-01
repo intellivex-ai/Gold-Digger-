@@ -1,3 +1,11 @@
+/**
+ * BlackMarket.jsx
+ * 
+ * Provides an interface for high-risk, high-reward "underground" operations.
+ * Operations cost upfront cash and carry a percentage-based risk of failure,
+ * which is visualized using colored progress bars.
+ */
+
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, AlertTriangle, Shield, TrendingUp, BarChart2 } from 'lucide-react'
@@ -7,6 +15,7 @@ import useUserStore from '../stores/useUserStore'
 import Card from '../components/Card'
 import ProgressBar from '../components/ProgressBar'
 
+// Helper for formatting large monetary values
 const fmt = (n) => {
   n = parseFloat(n || 0)
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`
@@ -14,9 +23,14 @@ const fmt = (n) => {
   return `$${n.toFixed(0)}`
 }
 
+// 5-tier color and label mapping for Risk Levels (0.0 to 1.0)
 const RISK_COLOR = ['#3DD68C', '#F5C842', '#FF9F43', '#FF6B6B', '#B56EFF']
 const RISK_LABEL = ['Safe', 'Low', 'Medium', 'High', 'Extreme']
 
+/**
+ * Overlay modal displayed immediately after an operation completes.
+ * Shows either a green success payout or a red "Busted" failure message.
+ */
 function ResultModal({ result, onClose }) {
   return (
     <motion.div
@@ -35,6 +49,7 @@ function ResultModal({ result, onClose }) {
         style={{ background: '#151622', border: '1px solid rgba(255,255,255,0.10)' }}
         onClick={e => e.stopPropagation()}
       >
+        {/* Dynamic Status Icon */}
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center mx-auto"
           style={{
@@ -46,15 +61,21 @@ function ResultModal({ result, onClose }) {
             : <AlertTriangle size={28} style={{ color: '#FF6B6B' }} />
           }
         </div>
+        
+        {/* Outcome Message */}
         <div>
           <p className="font-black text-lg" style={{ color: result.success ? '#3DD68C' : '#FF6B6B' }}>
             {result.success ? 'Operation Successful' : 'Busted'}
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--col-text-3)' }}>{result.message}</p>
         </div>
+        
+        {/* Payout Display (if successful) */}
         {result.payout > 0 && (
           <p className="text-2xl font-black nums" style={{ color: '#F5C842' }}>+{fmt(result.payout)}</p>
         )}
+        
+        {/* Dismiss Button */}
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onClose}
@@ -70,13 +91,21 @@ function ResultModal({ result, onClose }) {
 
 export default function BlackMarket() {
   const navigate = useNavigate()
+  
+  // Store Bindings
   const { items, fetchItems, runOperation, isLoading } = useBlackMarketStore()
-  const balance  = useUserStore((s) => parseFloat(s.user?.balance || 0))
-  const [result, setResult] = useState(null)
+  const balance  = useUserStore((s) => parseFloat(s.user?.cash || 0)) // Changed from balance to cash
+  
+  // Local State
+  const [result, setResult]   = useState(null)
   const [running, setRunning] = useState(null)
 
-  useEffect(() => { fetchItems?.() }, [])
+  // Hydrate operation list on mount
+  useEffect(() => { 
+    fetchItems?.() 
+  }, [fetchItems])
 
+  // Process an operation request
   const handleRun = async (item) => {
     if (running) return
     setRunning(item.id)
@@ -90,13 +119,14 @@ export default function BlackMarket() {
     }
   }
 
+  // Maps a float risk (0.0 - 1.0) to an integer index (0 - 4) for styling arrays
   const riskIdx = (r) => Math.min(4, Math.floor(parseFloat(r || 0) * 5))
 
   return (
     <div className="page-scroll">
       <div className="px-4 pt-5 pb-24 space-y-4">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex items-center gap-3">
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -112,7 +142,7 @@ export default function BlackMarket() {
           </div>
         </div>
 
-        {/* Warning */}
+        {/* ── Disclaimer Banner ── */}
         <div
           className="flex gap-3 p-3 rounded-2xl"
           style={{ background: 'rgba(255,159,67,0.08)', border: '1px solid rgba(255,159,67,0.18)' }}
@@ -123,11 +153,12 @@ export default function BlackMarket() {
           </p>
         </div>
 
-        {/* Operations */}
+        {/* ── Available Operations ── */}
         <Card>
           <p className="text-[10px] font-black tracking-widest uppercase mb-3" style={{ color: 'var(--col-text-3)' }}>
             Operations
           </p>
+          
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -137,8 +168,11 @@ export default function BlackMarket() {
           ) : (
             <div className="space-y-3">
               {items.map(item => {
+                // Determine risk styling bucket
                 const ri = riskIdx(item.risk_level)
                 const rc = RISK_COLOR[ri]
+                
+                // State tracking for this specific row
                 const isRunning = running === item.id
                 const canRun = balance >= parseFloat(item.cost || 0) && !running
 
@@ -148,6 +182,7 @@ export default function BlackMarket() {
                     className="p-3.5 rounded-2xl"
                     style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
                   >
+                    {/* Operation Title & Tier */}
                     <div className="flex items-start gap-3 mb-3">
                       <div
                         className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -169,7 +204,7 @@ export default function BlackMarket() {
                       </div>
                     </div>
 
-                    {/* Risk bar */}
+                    {/* Visual Risk Indicator */}
                     <div className="mb-3">
                       <div className="flex justify-between text-[9px] font-black tracking-widest uppercase mb-1">
                         <span style={{ color: 'var(--col-text-3)' }}>Risk</span>
@@ -178,6 +213,7 @@ export default function BlackMarket() {
                       <ProgressBar value={parseFloat(item.risk_level || 0)} color={rc} />
                     </div>
 
+                    {/* Footer: Payout Details & Run Button */}
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-[9px] font-black tracking-widest uppercase" style={{ color: 'var(--col-text-3)' }}>Potential</p>
@@ -207,6 +243,7 @@ export default function BlackMarket() {
         </Card>
       </div>
 
+      {/* Conditional Outcome Overlay */}
       {result && <ResultModal result={result} onClose={() => setResult(null)} />}
     </div>
   )

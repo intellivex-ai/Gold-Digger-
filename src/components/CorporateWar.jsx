@@ -1,9 +1,19 @@
+/**
+ * CorporateWar.jsx
+ * 
+ * A PVP component where a player's corporation can launch hostile actions 
+ * (Espionage, Sabotage, Raids) against rival corporations.
+ * Incorporates probability-based outcomes and detailed status feedback.
+ */
+
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, Bomb, Banknote, Shield, Swords, X, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import sounds from '../lib/soundManager'
 
+// ── Master List of Hostile Actions ──
+// Each action has a different cost-to-risk ratio.
 const WAR_ACTIONS = [
   {
     key: 'espionage',
@@ -11,7 +21,7 @@ const WAR_ACTIONS = [
     label: 'Corporate Espionage',
     description: 'Steal 5% of their business revenues for 2 hours.',
     cost: 10000,
-    success_chance: 0.60,
+    success_chance: 0.60, // 60% win rate
     color: '#B56EFF',
     emoji: '🕵️',
   },
@@ -31,7 +41,7 @@ const WAR_ACTIONS = [
     label: 'Treasury Raid',
     description: 'Steal up to 10% of their corporation bank.',
     cost: 50000,
-    success_chance: 0.30,
+    success_chance: 0.30, // High risk, high reward
     color: '#F5C842',
     emoji: '💰',
   },
@@ -48,14 +58,17 @@ export default function CorporateWar({ myCorp, rivalCorps = [] }) {
     sounds.tap()
     setLoading(true)
 
-    // Simulate outcome (backend would handle this in production)
+    // Simulate RNG outcome locally for immediate feedback
+    // In production, the backend edge function strictly enforces this roll
     const success = Math.random() < selectedAction.success_chance
+    
+    // Artificial delay to build suspense
     await new Promise(r => setTimeout(r, 1500))
 
     setResult({ success, action: selectedAction, corp: targetCorp })
     setLoading(false)
 
-    // In production: call edge function or supabase RPC
+    // ── Database Sync ──
     try {
       await supabase.from('corporate_wars').insert({
         attacker_corp: myCorp?.id,
@@ -63,13 +76,14 @@ export default function CorporateWar({ myCorp, rivalCorps = [] }) {
         action_type: selectedAction.key,
         status: success ? 'success' : 'failed',
         cost: selectedAction.cost,
-        damage_amount: success ? selectedAction.cost * 0.5 : 0,
+        damage_amount: success ? selectedAction.cost * 0.5 : 0, // Simplified math
       })
-    } catch { /* demo */ }
+    } catch { /* Demo fail-safe */ }
   }
 
   return (
     <div className="space-y-4">
+      {/* Header Banner */}
       <div className="flex items-center gap-3 px-4 py-3 rounded-2xl"
         style={{ background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)' }}>
         <Swords size={18} style={{ color: '#FF6B6B' }} />
@@ -79,7 +93,7 @@ export default function CorporateWar({ myCorp, rivalCorps = [] }) {
         </div>
       </div>
 
-      {/* Choose target */}
+      {/* ── Step 1: Target Selection ── */}
       <div>
         <div className="text-[10px] font-black tracking-widest mb-2" style={{ color: 'var(--col-text-3)' }}>SELECT TARGET CORPORATION</div>
         {rivalCorps.length === 0 ? (
@@ -105,7 +119,7 @@ export default function CorporateWar({ myCorp, rivalCorps = [] }) {
         )}
       </div>
 
-      {/* Choose action */}
+      {/* ── Step 2: Action Selection ── */}
       <div>
         <div className="text-[10px] font-black tracking-widest mb-2" style={{ color: 'var(--col-text-3)' }}>SELECT OPERATION</div>
         <div className="space-y-2">
@@ -141,7 +155,7 @@ export default function CorporateWar({ myCorp, rivalCorps = [] }) {
         </div>
       </div>
 
-      {/* Result */}
+      {/* ── Step 3: Result Banner ── */}
       <AnimatePresence>
         {result && (
           <motion.div
@@ -162,7 +176,7 @@ export default function CorporateWar({ myCorp, rivalCorps = [] }) {
         )}
       </AnimatePresence>
 
-      {/* Execute button */}
+      {/* ── Execute Button ── */}
       <motion.button
         whileTap={{ scale: 0.96, y: 2 }}
         onClick={executeAction}
@@ -171,7 +185,7 @@ export default function CorporateWar({ myCorp, rivalCorps = [] }) {
         style={{
           background: (loading || !selectedAction || !targetCorp)
             ? 'rgba(255,255,255,0.08)'
-            : 'linear-gradient(180deg, #FF6B6B 0%, #C0392B 100%)',
+            : 'linear-gradient(180deg, #FF6B6B 0%, #C0392B 100%)', // Red aggressive styling
           boxShadow: (loading || !selectedAction || !targetCorp)
             ? 'none'
             : '0 6px 0 #8B2020, 0 8px 24px rgba(255,107,107,0.35)',

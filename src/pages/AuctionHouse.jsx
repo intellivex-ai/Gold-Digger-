@@ -1,3 +1,11 @@
+/**
+ * AuctionHouse.jsx
+ * 
+ * A competitive player-to-player marketplace for bidding on rare items.
+ * Displays live listings with countdown timers, current bid tracking,
+ * and direct "Buyout" capabilities.
+ */
+
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Clock, Tag, Gavel, ArrowUpRight } from 'lucide-react'
@@ -6,6 +14,7 @@ import useAuctionStore from '../stores/useAuctionStore'
 import useUserStore from '../stores/useUserStore'
 import Card from '../components/Card'
 
+// Helper for formatting large monetary values
 const fmt = (n) => {
   n = parseFloat(n || 0)
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`
@@ -13,24 +22,43 @@ const fmt = (n) => {
   return `$${n.toFixed(0)}`
 }
 
+/**
+ * Custom hook to calculate and update a live countdown timer.
+ * Returns a human-readable string (e.g. "2h 15m" or "45s")
+ */
 function useCountdown(endAt) {
   const [left, setLeft] = useState(0)
+  
   useEffect(() => {
+    // Tick function recalculates time remaining
     const tick = () => setLeft(Math.max(0, new Date(endAt) - Date.now()))
-    tick()
+    tick() // Initial calculation
+    
+    // Update every second
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [endAt])
+  
+  // Convert MS to time units
   const s = Math.floor(left / 1000)
   const m = Math.floor(s / 60)
   const h = Math.floor(m / 60)
+  
+  // Format optimally based on remaining duration
   if (h > 0) return `${h}h ${m % 60}m`
   if (m > 0) return `${m}m ${s % 60}s`
   return `${s}s`
 }
 
+/**
+ * ── AuctionCard Component ─────────────────────────────────────────────
+ * 
+ * Displays an individual auction listing. Handles its own countdown state
+ * and highlights itself in red when less than 5 minutes remain (urgency).
+ */
 function AuctionCard({ listing, onBid, onBuyout }) {
   const countdown = useCountdown(listing.ends_at)
+  // Flag as urgent if under 5 minutes remaining
   const urgent = (new Date(listing.ends_at) - Date.now()) < 5 * 60000
   const currentBid = parseFloat(listing.current_bid || listing.start_price || 0)
 
@@ -42,11 +70,14 @@ function AuctionCard({ listing, onBid, onBuyout }) {
         border: '1px solid rgba(255,255,255,0.07)',
       }}
     >
+      {/* Top Header: Item Name & Timer */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <p className="font-black text-sm truncate" style={{ color: 'var(--col-text-1)' }}>{listing.item_name}</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--col-text-3)' }}>{listing.item_type}</p>
         </div>
+        
+        {/* Timer Badge - turns red if urgent */}
         <div
           className="flex items-center gap-1 px-2 py-1 rounded-lg"
           style={{
@@ -61,6 +92,7 @@ function AuctionCard({ listing, onBid, onBuyout }) {
         </div>
       </div>
 
+      {/* Pricing Information */}
       <div className="flex items-end gap-2 mb-3">
         <div>
           <p className="text-[9px] font-black tracking-widest uppercase mb-0.5" style={{ color: 'var(--col-text-3)' }}>Current Bid</p>
@@ -74,6 +106,7 @@ function AuctionCard({ listing, onBid, onBuyout }) {
         )}
       </div>
 
+      {/* Action Buttons */}
       <div className="flex gap-2">
         <motion.button
           whileTap={{ y: 2, scale: 0.97 }}
@@ -87,6 +120,8 @@ function AuctionCard({ listing, onBid, onBuyout }) {
         >
           <Gavel size={13} /> Place Bid
         </motion.button>
+        
+        {/* Only show Buyout button if a buyout price is configured */}
         {listing.buyout_price && (
           <motion.button
             whileTap={{ y: 2, scale: 0.97 }}
@@ -108,15 +143,20 @@ function AuctionCard({ listing, onBid, onBuyout }) {
 
 export default function AuctionHouse() {
   const navigate = useNavigate()
+  
+  // Auction Store Bindings
   const { listings, fetchListings, placeBid, buyout, isLoading } = useAuctionStore()
 
-  useEffect(() => { fetchListings?.() }, [])
+  // Hydrate auction list on mount
+  useEffect(() => { 
+    fetchListings?.() 
+  }, [fetchListings])
 
   return (
     <div className="page-scroll">
       <div className="px-4 pt-5 pb-24 space-y-4">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex items-center gap-3">
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -140,11 +180,12 @@ export default function AuctionHouse() {
           </div>
         </div>
 
-        {/* Listings */}
+        {/* ── Listings Container ── */}
         <Card>
           <p className="text-[10px] font-black tracking-widest uppercase mb-3" style={{ color: 'var(--col-text-3)' }}>
             Active Auctions
           </p>
+          
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -152,12 +193,14 @@ export default function AuctionHouse() {
               ))}
             </div>
           ) : listings.length === 0 ? (
+            // Empty State
             <div className="py-12 flex flex-col items-center gap-2">
               <Tag size={28} style={{ color: 'rgba(255,255,255,0.15)' }} />
               <p className="text-sm font-semibold" style={{ color: 'var(--col-text-3)' }}>No active auctions</p>
               <p className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>Check back soon</p>
             </div>
           ) : (
+            // Active Listings
             <div className="space-y-3">
               {listings.map(l => (
                 <AuctionCard

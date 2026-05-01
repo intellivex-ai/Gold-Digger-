@@ -1,56 +1,98 @@
+/**
+ * OrderModal.jsx
+ * 
+ * An animated bottom-sheet modal used for buying and selling stocks.
+ * Supports switching between "Market" (buy now at current price) 
+ * and "Limit" (buy later at a specific price) orders.
+ */
+
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, TrendingUp, TrendingDown } from 'lucide-react'
 import sounds from '../lib/soundManager'
 
 export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmit }) {
+  // Form State
   const [quantity,   setQuantity]   = useState('1')
-  const [orderType,  setOrderType]  = useState('market')
+  const [orderType,  setOrderType]  = useState('market') // 'market' | 'limit'
   const [limitPrice, setLimitPrice] = useState(stock?.price ? parseFloat(stock.price).toFixed(2) : '')
+  
+  // UI State
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState('')
 
+  // Math Calculations for the UI
   const price = orderType === 'market' ? parseFloat(stock?.price || 0) : parseFloat(limitPrice || 0)
   const total = price * parseFloat(quantity || 0)
+  
+  // Theming based on Buy vs Sell
   const isBuy = side === 'buy'
   const actionColor = isBuy ? '#3DD68C' : '#FF5A5A'
 
+  /** Validates and submits the order */
   async function handleSubmit() {
     setError('')
     const qty = parseInt(quantity)
-    if (!qty || qty < 1) { setError('Enter a valid quantity.'); sounds.error?.(); return }
-    if (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0)) {
-      setError('Enter a valid limit price.'); sounds.error?.(); return
+    
+    // Validations
+    if (!qty || qty < 1) { 
+      setError('Enter a valid quantity.')
+      sounds.error?.()
+      return 
     }
+    
+    if (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0)) {
+      setError('Enter a valid limit price.')
+      sounds.error?.()
+      return
+    }
+
     setLoading(true)
     try {
+      // Execute the order (this calls the parent component's onSubmit prop, which triggers Supabase)
       await onSubmit({ side, quantity: qty, orderType, price })
+      
+      // Success!
       isBuy ? sounds.buy?.() : sounds.sell?.()
-      onClose(); setQuantity('1')
-    } catch (e) { setError(e.message || 'Order failed.'); sounds.error?.() }
-    finally { setLoading(false) }
+      onClose()
+      setQuantity('1') // Reset for next time
+    } catch (e) { 
+      // Handle network or logic errors (e.g. "Not enough cash")
+      setError(e.message || 'Order failed.')
+      sounds.error?.() 
+    } finally { 
+      setLoading(false) 
+    }
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
+          {/* Background overlay */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose} className="fixed inset-0 z-[60]"
             style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }} />
 
+          {/* Modal Sheet */}
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] z-[70] px-5 pt-5 pb-8 rounded-t-[28px]"
+            className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[430px] z-[70] px-5 pt-5 rounded-t-[28px] overflow-y-auto overscroll-contain"
             style={{
               background: 'linear-gradient(180deg, #1A1B28 0%, #141520 100%)',
               border: '1px solid rgba(255,255,255,0.08)', borderBottom: 'none',
               boxShadow: '0 -8px 48px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08)',
+              maxHeight: '88dvh',
+              /* Safe area for bottom inset (e.g. iPhone home indicator) */
+              paddingBottom: 'max(32px, env(safe-area-inset-bottom))',
             }}
           >
+            {/* iOS-style drag handle */}
             <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: 'rgba(255,255,255,0.15)' }} />
 
+            {/* Header */}
             <div className="flex items-center justify-between mb-5">
               <div>
                 <div className="flex items-center gap-2">
@@ -70,6 +112,7 @@ export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmi
               </motion.button>
             </div>
 
+            {/* Market / Limit Toggle Switch */}
             <div className="flex rounded-xl p-1 mb-5"
               style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.06)' }}>
               {['market', 'limit'].map((t) => (
@@ -84,13 +127,14 @@ export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmi
               ))}
             </div>
 
+            {/* Quantity Input with -/+ buttons */}
             <div className="mb-4">
               <label className="block text-[10px] font-black tracking-widest uppercase mb-2"
                 style={{ color: 'var(--col-text-3)' }}>Quantity (shares)</label>
               <div className="flex items-center gap-2">
                 {[
                   { label: '−', fn: () => setQuantity((q) => String(Math.max(1, parseInt(q || 1) - 1))) },
-                  null,
+                  null, // This represents the input field in the middle
                   { label: '+', fn: () => setQuantity((q) => String(parseInt(q || 1) + 1)) },
                 ].map((btn, i) => btn ? (
                   <motion.button key={i} whileTap={{ scale: 0.85 }} onClick={btn.fn}
@@ -107,6 +151,7 @@ export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmi
               </div>
             </div>
 
+            {/* Limit Price Input (only visible if orderType is 'limit') */}
             {orderType === 'limit' && (
               <div className="mb-4">
                 <label className="block text-[10px] font-black tracking-widest uppercase mb-2"
@@ -116,6 +161,7 @@ export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmi
               </div>
             )}
 
+            {/* Estimated Total Calculation */}
             <div className="flex justify-between items-center py-3 my-4 rounded-xl px-3"
               style={{ background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <span className="text-sm font-bold" style={{ color: 'var(--col-text-3)' }}>Estimated Total</span>
@@ -124,6 +170,7 @@ export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmi
               </span>
             </div>
 
+            {/* Error Message */}
             {error && (
               <p className="text-xs font-bold mb-3 px-3 py-2 rounded-lg"
                 style={{ color: '#FF5A5A', background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.20)' }}>
@@ -131,6 +178,7 @@ export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmi
               </p>
             )}
 
+            {/* Submit Button */}
             <motion.button whileTap={{ y: 3, scale: 0.98 }} onClick={handleSubmit} disabled={loading}
               className={isBuy ? 'btn-game-blue w-full' : 'btn-game-red w-full'}
               style={{ paddingTop: 14, paddingBottom: 14, fontSize: 15,
@@ -147,6 +195,7 @@ export default function OrderModal({ open, side = 'buy', stock, onClose, onSubmi
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

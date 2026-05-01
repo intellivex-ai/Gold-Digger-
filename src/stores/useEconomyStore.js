@@ -1,8 +1,16 @@
+/**
+ * useEconomyStore.js
+ * 
+ * This file handles global "Economy Events" (e.g. "Tech Boom", "Supply Crunch").
+ * These are random events that apply multipliers to specific business sectors,
+ * making some businesses earn more or less money temporarily.
+ */
+
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '../lib/supabase'
 
-// Mock events shown when Supabase table doesn't exist yet
+// Fake events to show if the database table isn't set up yet
 const MOCK_EVENTS = [
   {
     id: '1',
@@ -26,13 +34,19 @@ const MOCK_EVENTS = [
   },
 ]
 
-// Singleton channel — prevents duplicate subscriptions in StrictMode
+// Singleton channel — ensures we don't open multiple connections to the database by mistake
 let _channel = null
 
 const useEconomyStore = create(persist((set, get) => ({
-  events: [],
+  // ── State (What we are remembering) ──────────────────────────────────────────
+  events: [],          // Active global events
   isLoading: false,
 
+  // ── Core Features ────────────────────────────────────────────────────────────
+
+  /** 
+   * Fetches all currently active economy events from the database.
+   */
   fetchEvents: async () => {
     set({ isLoading: true })
     try {
@@ -40,24 +54,24 @@ const useEconomyStore = create(persist((set, get) => ({
         .from('economy_events')
         .select('*')
         .eq('active', true)
-        .gt('end_at', new Date().toISOString())
+        .gt('end_at', new Date().toISOString()) // Only get events that haven't expired
         .order('created_at', { ascending: false })
+        
       if (error) throw error
       set({ events: data || [], isLoading: false })
     } catch {
-      // Table likely doesn't exist yet — use mock data so UI never crashes
+      // If the table doesn't exist yet, use our fake data so the UI doesn't crash
       set({ events: MOCK_EVENTS, isLoading: false })
     }
   },
 
   /**
-   * Subscribe to economy_events realtime changes.
-   * Uses a module-level singleton so React StrictMode double-invocation
-   * and duplicate callers never create a second channel.
-   * Returns a cleanup function.
+   * Listens for live changes to economy events (e.g. when an admin triggers one).
+   * It uses a special "singleton" pattern so that even if React mounts twice,
+   * we only ever open ONE connection to the database.
    */
   subscribeToEvents: () => {
-    // Already subscribed — return a no-op cleanup
+    // If we're already listening, do nothing
     if (_channel) return () => {}
 
     try {
@@ -66,11 +80,11 @@ const useEconomyStore = create(persist((set, get) => ({
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'economy_events' },
-          () => get().fetchEvents()
+          () => get().fetchEvents() // Whenever anything changes, grab the fresh list
         )
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR') {
-            // Silently fall back — mock data is already shown
+            // If the connection fails, silently fall back
             supabase.removeChannel(_channel)
             _channel = null
           }
@@ -79,6 +93,7 @@ const useEconomyStore = create(persist((set, get) => ({
       _channel = null
     }
 
+    // Return a function to clean up the listener later
     return () => {
       if (_channel) {
         supabase.removeChannel(_channel)
@@ -87,7 +102,13 @@ const useEconomyStore = create(persist((set, get) => ({
     }
   },
 
-  /** Get combined multiplier for a sector (1.0 = no effect) */
+  // ── Helper Functions ─────────────────────────────────────────────────────────
+
+  /** 
+   * Calculates the combined multiplier for a specific business sector.
+   * Example: If Tech has a 1.5x boom and a 0.8x shortage, it returns 1.2.
+   * If there are no events for the sector, it returns 1.0 (normal).
+   */
   getSectorMultiplier: (sector) => {
     const { events } = get()
     return events
@@ -95,7 +116,9 @@ const useEconomyStore = create(persist((set, get) => ({
       .reduce((acc, e) => acc * parseFloat(e.multiplier || 1), 1)
   },
 
+  /** Gets a list of just the active events */
   getActiveEvents: () => get().events.filter(e => e.active),
+  
 }), { name: 'economy-storage' }))
 
 export default useEconomyStore

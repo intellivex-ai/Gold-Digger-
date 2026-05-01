@@ -1,10 +1,19 @@
+/**
+ * BuyBusinessModal.jsx
+ * 
+ * An animated "BottomSheet" style modal that slides up from the bottom of the screen.
+ * Allows users to purchase a new business, choose its industry type, and give it a custom name.
+ */
+
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Building2, Store, Factory, Monitor, Coffee } from 'lucide-react'
 import useBusinessStore from '../stores/useBusinessStore'
 import useUserStore from '../stores/useUserStore'
 import sounds from '../lib/soundManager'
 
+// Defines the available business sectors and their visual styles
 const TYPES = [
   { id: 'retail',        label: 'Retail',        icon: Store,     color: '#5B9CF6' },
   { id: 'real_estate',   label: 'Real Estate',   icon: Building2, color: '#3DD68C' },
@@ -13,21 +22,36 @@ const TYPES = [
 ]
 
 export default function BuyBusinessModal({ open, onClose }) {
-  const [name, setName]     = useState('')
-  const [type, setType]     = useState('retail')
+  // Form State
+  const [name, setName]       = useState('')
+  const [type, setType]       = useState('retail')
+  
+  // UI State
   const [loading, setLoading] = useState(false)
-  const [error, setError]   = useState('')
+  const [error, setError]     = useState('')
 
   const createBusiness = useBusinessStore((s) => s.createBusiness)
   const user           = useUserStore((s) => s.user)
 
+  // Don't render anything if it's closed
   if (!open) return null
 
+  /** Handles the user hitting "Launch" */
   async function handleSubmit(e) {
-    e.preventDefault()
-    if (!name.trim()) { setError('Business name is required'); sounds.error?.(); return }
-    setLoading(true); setError(''); sounds.tap?.()
+    e.preventDefault() // Prevents page reload
+    
+    // Safety check
+    if (!name.trim()) { 
+      setError('Business name is required')
+      sounds.error?.() 
+      return 
+    }
+    
+    setLoading(true)
+    setError('')
+    sounds.tap?.()
 
+    // Send to Zustand store
     const res = await createBusiness({
       owner_id:           user.id,
       name:               name.trim(),
@@ -36,46 +60,63 @@ export default function BuyBusinessModal({ open, onClose }) {
       revenue_per_minute: 10,
       upgrade_cost:       1000,
     })
+    
     setLoading(false)
 
-    if (res.success) { sounds.buy?.(); setName(''); setType('retail'); onClose() }
-    else { sounds.error?.(); setError(res.message || 'Failed to create business') }
+    if (res.success) { 
+      // Success: Play sound, clear form, and close modal
+      sounds.buy?.()
+      setName('')
+      setType('retail')
+      onClose() 
+    } else { 
+      // Failed (e.g. not enough money)
+      sounds.error?.()
+      setError(res.message || 'Failed to create business') 
+    }
   }
 
+  // Get the selected type object so we can show its dynamic name on the submit button
   const selected = TYPES.find(t => t.id === type)
 
-  return (
+  return createPortal(
+    // AnimatePresence allows the modal to slide down before completely disappearing from the DOM
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-end justify-center">
-        {/* Backdrop */}
+      {open && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center">
+          
+          {/* The blurry dark background behind the modal */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
+          onClick={onClose} // Clicking outside closes it
           className="absolute inset-0"
           style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
         />
 
-        {/* Sheet */}
+        {/* The main Modal Sheet */}
         <motion.div
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
+          initial={{ y: '100%' }} // Start completely offscreen at the bottom
+          animate={{ y: 0 }}      // Slide up
+          exit={{ y: '100%' }}    // Slide back down
           transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-          className="relative z-10 w-full max-w-[430px] rounded-t-[28px] px-5 pt-5 pb-8"
+          className="relative z-10 w-full max-w-[430px] rounded-t-[28px] px-5 pt-5 overflow-y-auto overscroll-contain"
           style={{
             background: 'linear-gradient(180deg, #1A1B28 0%, #141520 100%)',
             border: '1px solid rgba(255,255,255,0.08)',
             borderBottom: 'none',
             boxShadow: '0 -8px 48px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08)',
+            maxHeight: '88dvh',
+            /* Safe area for iPhone home indicator */
+            paddingBottom: 'max(32px, env(safe-area-inset-bottom))',
           }}
         >
-          {/* Handle */}
+          {/* iOS-style little drag handle indicator */}
           <div className="w-10 h-1 rounded-full mx-auto mb-5"
             style={{ background: 'rgba(255,255,255,0.15)' }} />
 
-          {/* Header */}
+          {/* ── Modal Header ── */}
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-xl font-black" style={{ color: 'var(--col-text-1)' }}>
@@ -85,6 +126,7 @@ export default function BuyBusinessModal({ open, onClose }) {
                 Starting cost: $1,000
               </p>
             </div>
+            {/* Close Button */}
             <motion.button
               whileTap={{ scale: 0.85 }}
               onClick={() => { sounds.tap?.(); onClose() }}
@@ -99,7 +141,8 @@ export default function BuyBusinessModal({ open, onClose }) {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Error */}
+            
+            {/* ── Error Banner ── */}
             {error && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="px-4 py-2.5 rounded-xl text-sm font-bold"
@@ -113,7 +156,7 @@ export default function BuyBusinessModal({ open, onClose }) {
               </motion.div>
             )}
 
-            {/* Name */}
+            {/* ── Name Input ── */}
             <div>
               <label className="block text-[10px] font-black tracking-widest uppercase mb-2"
                 style={{ color: 'var(--col-text-3)' }}>
@@ -129,7 +172,7 @@ export default function BuyBusinessModal({ open, onClose }) {
               />
             </div>
 
-            {/* Type selector */}
+            {/* ── Industry Type Grid ── */}
             <div>
               <label className="block text-[10px] font-black tracking-widest uppercase mb-3"
                 style={{ color: 'var(--col-text-3)' }}>
@@ -147,10 +190,12 @@ export default function BuyBusinessModal({ open, onClose }) {
                       onClick={() => { sounds.tap?.(); setType(t.id) }}
                       className="flex flex-col items-center justify-center gap-2 py-4 rounded-xl border transition-all"
                       style={isSelected ? {
+                        // Highlighted styles
                         background: `${t.color}15`,
                         border: `1px solid ${t.color}40`,
                         boxShadow: `0 0 12px ${t.color}20`,
                       } : {
+                        // Dimmed styles
                         background: 'rgba(0,0,0,0.25)',
                         border: '1px solid rgba(255,255,255,0.07)',
                       }}
@@ -172,7 +217,7 @@ export default function BuyBusinessModal({ open, onClose }) {
               </div>
             </div>
 
-            {/* Submit */}
+            {/* ── Submit Button ── */}
             <motion.button
               type="submit"
               className="btn-game-gold w-full"
@@ -181,11 +226,13 @@ export default function BuyBusinessModal({ open, onClose }) {
             >
               {loading
                 ? <span className="w-5 h-5 border-2 border-[#1A1200]/50 border-t-[#1A1200] rounded-full animate-spin" />
-                : `🏢 Launch ${selected?.label || 'Business'}`}
+                : `🏢 Launch ${selected?.name || 'Business'}`}
             </motion.button>
           </form>
         </motion.div>
       </div>
-    </AnimatePresence>
+      )}
+    </AnimatePresence>,
+    document.body
   )
 }

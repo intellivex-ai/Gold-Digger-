@@ -1,7 +1,17 @@
+/**
+ * useSkillStore.js
+ * 
+ * Manages the player's "Skill Tree" (Talents).
+ * As players level up, they get Talent Points. They can spend these points
+ * to unlock permanent passive bonuses (like lower taxes, better business income, etc).
+ */
+
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '../lib/supabase'
 
+// The definition of all the skills in the game.
+// If the database isn't ready, this acts as the "Master List".
 const SKILL_TREES_MOCK = {
   wolf: [
     { node_key: 'wolf_1', label: 'Market Instinct', description: 'Stock buy fees -5%', icon: 'trending-up', cost_points: 1, requires: null, effect_type: 'stock_fee_discount', effect_value: 0.05 },
@@ -28,11 +38,15 @@ const SKILL_TREES_MOCK = {
 }
 
 const useSkillStore = create(persist((set, get) => ({
-  trees: SKILL_TREES_MOCK,
-  unlockedNodes: [],  // ['wolf_1', 'tycoon_1', ...]
-  talentPoints: 0,
+  // ── State (What we are remembering) ──────────────────────────────────────────
+  trees: SKILL_TREES_MOCK, // The master list of all possible skills
+  unlockedNodes: [],       // A list of the specific skill keys the user has purchased (e.g. ['wolf_1', 'tycoon_1'])
+  talentPoints: 0,         // How many unspent points the user has
   isLoading: false,
 
+  // ── Core Features ────────────────────────────────────────────────────────────
+
+  /** Grabs the list of skills the user has previously unlocked from the database */
   fetchSkills: async (userId) => {
     if (!userId) return
     set({ isLoading: true })
@@ -41,33 +55,56 @@ const useSkillStore = create(persist((set, get) => ({
         .from('player_skills')
         .select('node_key')
         .eq('user_id', userId)
+        
       if (error) throw error
+      // Convert [{ node_key: 'wolf_1' }] into a simple array ['wolf_1']
       set({ unlockedNodes: (data || []).map(r => r.node_key), isLoading: false })
     } catch {
       set({ isLoading: false })
     }
   },
 
+  /** 
+   * Spends talent points to permanently unlock a new skill.
+   */
   unlockNode: async (userId, nodeKey, talentPoints) => {
     const { unlockedNodes, trees } = get()
+    
+    // Safety checks
     if (unlockedNodes.includes(nodeKey)) return { success: false, message: 'Already unlocked' }
 
+    // Find the exact skill they are trying to buy by looking through all the trees
     const node = Object.values(trees).flat().find(n => n.node_key === nodeKey)
     if (!node) return { success: false, message: 'Node not found' }
+    
+    // Make sure they bought the previous skill in the branch first
     if (node.requires && !unlockedNodes.includes(node.requires)) return { success: false, message: 'Prerequisite not met' }
+    
+    // Make sure they have enough points
     if (talentPoints < node.cost_points) return { success: false, message: 'Not enough talent points' }
 
     try {
+      // Save it to the database
       const { error } = await supabase.from('player_skills').insert({ user_id: userId, node_key: nodeKey })
       if (error) throw error
-    } catch { /* demo mode — proceed anyway */ }
+    } catch { 
+      /* If database fails, proceed anyway (Demo Mode) */ 
+    }
 
+    // Update the local screen
     set(s => ({ unlockedNodes: [...s.unlockedNodes, nodeKey], talentPoints: s.talentPoints - node.cost_points }))
     return { success: true }
   },
 
+  /** Helper to just visually update the number of points they have */
   setTalentPoints: (pts) => set({ talentPoints: pts }),
 
+  // ── Math & Checks (Used by other parts of the app) ───────────────────────────
+
+  /** 
+   * Checks if the user has ANY skill that gives a specific effect.
+   * Example: hasEffect('unlock_limit_orders') returns true or false.
+   */
   hasEffect: (effectType) => {
     const { unlockedNodes, trees } = get()
     return Object.values(trees).flat().some(
@@ -75,6 +112,10 @@ const useSkillStore = create(persist((set, get) => ({
     )
   },
 
+  /** 
+   * Adds up the total bonus percentage from all unlocked skills of a specific type.
+   * Example: If they have two skills giving 5% and 10% discount, getEffectTotal('takeover_discount') returns 0.15
+   */
   getEffectTotal: (effectType) => {
     const { unlockedNodes, trees } = get()
     return Object.values(trees).flat()
@@ -82,15 +123,21 @@ const useSkillStore = create(persist((set, get) => ({
       .reduce((sum, n) => sum + parseFloat(n.effect_value), 0)
   },
 
+  /** Simple check: Have they bought this specific skill? */
   isUnlocked: (nodeKey) => get().unlockedNodes.includes(nodeKey),
+  
+  /** Simple check: Are they legally allowed to buy this right now? */
   canUnlock: (nodeKey) => {
     const { unlockedNodes, trees, talentPoints } = get()
     const node = Object.values(trees).flat().find(n => n.node_key === nodeKey)
+    
     if (!node) return false
-    if (unlockedNodes.includes(nodeKey)) return false
-    if (node.requires && !unlockedNodes.includes(node.requires)) return false
-    return talentPoints >= node.cost_points
+    if (unlockedNodes.includes(nodeKey)) return false // Already own it
+    if (node.requires && !unlockedNodes.includes(node.requires)) return false // Need previous skill
+    
+    return talentPoints >= node.cost_points // Need enough points
   },
-}), { name: 'skills-storage' }))
+  
+}), { name: 'skills-storage' })) // Persist saves their progress locally so demo mode works across refreshes
 
 export default useSkillStore

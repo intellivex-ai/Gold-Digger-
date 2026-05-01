@@ -1,24 +1,39 @@
+/**
+ * ErrorBoundary.jsx
+ * 
+ * This component acts as a global safety net for the entire React app.
+ * If any component inside it crashes (throws a JavaScript error), this boundary
+ * catches it and displays a nice fallback screen instead of letting the entire
+ * app turn into a blank white screen.
+ */
+
 import { Component } from 'react'
 
 export default class ErrorBoundary extends Component {
   state = { hasError: false, error: null }
 
+  // This lifecycle method is called right after an error is thrown
   static getDerivedStateFromError(error) {
+    // Update state so the next render shows the fallback UI.
     return { hasError: true, error }
   }
 
+  // Good place to log the error to a service like Sentry or Datadog
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary] Uncaught error:', error, info)
   }
 
+  // Refresh the page to attempt recovery
   handleReset = () => {
     this.setState({ hasError: false, error: null })
-    window.location.href = '/'
+    window.location.href = '/' // Force a full reload back to home
   }
 
   render() {
+    // If everything is fine, just render the app normally
     if (!this.state.hasError) return this.props.children
 
+    // ── Fallback "Oops!" Screen ──
     return (
       <div
         style={{
@@ -27,7 +42,7 @@ export default class ErrorBoundary extends Component {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#0D0E16',
+          background: '#0D0E16', // Dark app background
           color: '#fff',
           padding: '32px 24px',
           textAlign: 'center',
@@ -44,6 +59,8 @@ export default class ErrorBoundary extends Component {
         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginBottom: 32, maxWidth: 320 }}>
           This error has been logged. Your progress is safe.
         </p>
+        
+        {/* Reset Button */}
         <button
           onClick={this.handleReset}
           style={{

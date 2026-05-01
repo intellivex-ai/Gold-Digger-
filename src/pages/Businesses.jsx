@@ -1,3 +1,11 @@
+/**
+ * Businesses.jsx
+ * 
+ * The main "Empire" view where users manage their active businesses.
+ * Displays a list of owned businesses, calculates total passive revenue per minute,
+ * and provides access to the "Buy Business" marketplace modal.
+ */
+
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -10,6 +18,7 @@ import sounds from '../lib/soundManager'
 import { BusinessesSkeleton } from '../components/SkeletonLoader'
 import BuyBusinessModal from '../components/BuyBusinessModal'
 
+// Dynamic icon mapping based on business category/type
 const BIZ_ICONS = {
   coffee:   Coffee,
   building: Building2,
@@ -18,7 +27,7 @@ const BIZ_ICONS = {
   store:    Store,
 }
 
-// Maps a business color hex to a CSS variable name for glow
+// Formats large numbers into readable string formats (e.g., $1.5M, $400k)
 const fmtMoney = (n) => {
   if (n >= 1e9) return `$${(n/1e9).toFixed(2)}B`
   if (n >= 1e6) return `$${(n/1e6).toFixed(2)}M`
@@ -27,17 +36,23 @@ const fmtMoney = (n) => {
 }
 
 export default function Businesses() {
+  // Store bindings
   const businesses      = useBusinessStore((s) => s.businesses)
   const isLoading       = useBusinessStore((s) => s.isLoading)
   const fetchBusinesses = useBusinessStore((s) => s.fetchBusinesses)
   const user            = useUserStore((s) => s.user)
+  
   const navigate        = useNavigate()
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  useEffect(() => { if (user?.id) fetchBusinesses(user.id) }, [user?.id])
+  // Hydrate user's owned businesses on mount
+  useEffect(() => { 
+    if (user?.id) fetchBusinesses(user.id) 
+  }, [user?.id, fetchBusinesses])
 
   if (isLoading && businesses.length === 0) return <BusinessesSkeleton />
 
+  // Calculate aggregated passive income across all owned businesses
   const totalRevenue = businesses.reduce(
     (sum, b) => sum + parseFloat(b.revenue_per_minute || b.revenuePerMin || 0), 0
   )
@@ -54,7 +69,8 @@ export default function Businesses() {
             {businesses.length} {businesses.length === 1 ? 'business' : 'businesses'} active
           </p>
         </div>
-        {/* Total income badge */}
+        
+        {/* Total income badge (top right) */}
         <div
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl"
           style={{
@@ -72,6 +88,7 @@ export default function Businesses() {
       </div>
 
       {/* ── SUMMARY PILLS ── */}
+      {/* High-level metrics for the player's empire */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <StatCard label="Total Revenue" value={`${fmtMoney(totalRevenue)}/min`} color="#3DD68C" />
         <StatCard label="Businesses"    value={businesses.length} color="#5B9CF6" />
@@ -90,7 +107,9 @@ export default function Businesses() {
             </p>
           </div>
         )}
+
         {businesses.map((biz, i) => {
+          // Resolve icon and metadata
           const IconComp  = BIZ_ICONS[biz.icon] || Store
           const revPerMin = parseFloat(biz.revenue_per_minute || biz.revenuePerMin || 0)
           const color     = biz.color || '#5B9CF6'
@@ -100,7 +119,7 @@ export default function Businesses() {
               key={biz.id}
               initial={{ opacity: 0, x: -16 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.06, type: 'spring', stiffness: 300, damping: 25 }}
+              transition={{ delay: i * 0.06, type: 'spring', stiffness: 300, damping: 25 }} // Staggered list entrance
             >
               <motion.div
                 whileTap={{ scale: 0.98, x: 2 }}
@@ -110,11 +129,11 @@ export default function Businesses() {
                 className="card cursor-pointer !p-0 overflow-hidden"
                 style={{ borderColor: `${color}20` }}
               >
-                {/* Color accent line */}
+                {/* Visual accent line matching the business color */}
                 <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, ${color}, transparent)` }} />
 
                 <div className="flex items-center gap-4 p-4">
-                  {/* Business icon */}
+                  {/* Business Icon Container */}
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
                     style={{
@@ -126,12 +145,13 @@ export default function Businesses() {
                     <IconComp size={22} style={{ color }} />
                   </div>
 
+                  {/* Business Details */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <p className="font-black truncate" style={{ color: 'var(--col-text-1)' }}>
                         {biz.name}
                       </p>
-                      {/* Level badge */}
+                      {/* Level Badge */}
                       <span
                         className="flex-shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full"
                         style={{
@@ -143,6 +163,7 @@ export default function Businesses() {
                         LV.{biz.level}
                       </span>
                     </div>
+                    {/* Revenue Info */}
                     <div className="flex items-center gap-1">
                       <TrendingUp size={11} color="#3DD68C" />
                       <span className="text-xs font-bold nums" style={{ color: '#3DD68C' }}>
@@ -162,7 +183,7 @@ export default function Businesses() {
         })}
       </div>
 
-      {/* ── BUY BUTTON ── */}
+      {/* ── MARKETPLACE TRIGGER ── */}
       <motion.button
         className="btn-game-gold w-full"
         style={{ paddingTop: 14, paddingBottom: 14, fontSize: 15 }}
@@ -173,13 +194,15 @@ export default function Businesses() {
         Buy New Business
       </motion.button>
 
-      {isModalOpen && (
-        <BuyBusinessModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
-      )}
+      {/* Modal overlays current screen rather than navigating away */}
+      <BuyBusinessModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   )
 }
 
+/**
+ * Minor reusable component for the high-level summary metrics
+ */
 function StatCard({ label, value, color }) {
   return (
     <div

@@ -205,10 +205,8 @@ export default function BusinessDetail() {
       </div>
 
       {/* Modals */}
-      <AnimatePresence>
-        {showCSuite && <CSuitePanel businessId={id} onClose={() => setShowCSuite(false)} />}
-        {showTakeover && <TakeoverInitiateModal business={business} onClose={() => setShowTakeover(false)} />}
-      </AnimatePresence>
+      <CSuitePanel open={showCSuite} businessId={id} onClose={() => setShowCSuite(false)} />
+      <TakeoverInitiateModal open={showTakeover} business={business} onClose={() => setShowTakeover(false)} />
     </div>
   )
 }

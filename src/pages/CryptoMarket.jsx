@@ -1,5 +1,14 @@
+/**
+ * CryptoMarket.jsx
+ * 
+ * A specialized trading interface for volatile digital assets (Crypto).
+ * Displays a real-time list of assets, user portfolio valuation, and includes
+ * an interactive slide-up "Trade Sheet" for executing buy/sell orders.
+ */
+
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import useCryptoStore from '../stores/useCryptoStore'
@@ -7,6 +16,7 @@ import useUserStore from '../stores/useUserStore'
 import ProgressBar from '../components/ProgressBar'
 import Card from '../components/Card'
 
+// Quick formatter for large currency values
 const fmt = (n, dec = 2) => {
   n = parseFloat(n || 0)
   if (n >= 1e9) return `$${(n / 1e9).toFixed(dec)}B`
@@ -14,55 +24,76 @@ const fmt = (n, dec = 2) => {
   if (n >= 1e3) return `$${(n / 1e3).toFixed(dec)}K`
   return `$${n.toFixed(dec)}`
 }
+
+// Formats percentage changes with explicit +/- signs
 const pct = (n) => `${n >= 0 ? '+' : ''}${parseFloat(n || 0).toFixed(2)}%`
 
+/**
+ * ── TradeSheet Component ──────────────────────────────────────────────
+ * 
+ * An animated, modal-like sheet that slides up from the bottom when an asset
+ * is selected. Handles input validation for buy/sell operations against user balance.
+ */
 function TradeSheet({ asset, onClose }) {
   const [mode, setMode]       = useState('buy')
   const [amount, setAmount]   = useState('')
   const [status, setStatus]   = useState(null)
-  const { buyAsset, sellAsset } = useCryptoStore()
-  const balance = useUserStore((s) => parseFloat(s.user?.balance || 0))
+  
+  const { buyCrypto, sellCrypto } = useCryptoStore()
+  const balance = useUserStore((s) => parseFloat(s.user?.cash || 0))
 
-  const price   = parseFloat(asset?.current_price || 0)
+  // Derived Trade Calculations
+  const price   = parseFloat(asset?.price || 0)
   const units   = parseFloat(amount) || 0
   const total   = units * price
+  
+  // Validation Checks
   const canBuy  = mode === 'buy' && total > 0 && total <= balance
-  const holding = parseFloat(asset?.holding || 0)
+  const holding = parseFloat(useCryptoStore.getState().getHolding(asset?.symbol)?.quantity || 0)
   const canSell = mode === 'sell' && units > 0 && units <= holding
 
+  // Execute the trade and manage button loading/success states
   const handleSubmit = async () => {
     setStatus('loading')
     try {
-      if (mode === 'buy')  await buyAsset(asset.id, units)
-      else                 await sellAsset(asset.id, units)
+      if (mode === 'buy')  await buyCrypto(asset.symbol, total)
+      else                 await sellCrypto(asset.symbol, units)
       setStatus('success')
+      // Auto-close sheet after a brief success indication
       setTimeout(onClose, 900)
     } catch {
       setStatus('error')
+      // Revert error state so user can try again
       setTimeout(() => setStatus(null), 1500)
     }
   }
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-end"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={onClose}
-    >
+  return createPortal(
+    <AnimatePresence>
+      {asset && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0"
+            style={{ background: 'rgba(0,0,0,0.7)' }}
+            onClick={onClose}
+          />
+      {/* ── Slide-up Panel ── */}
       <motion.div
-        initial={{ y: 80, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 80, opacity: 0 }}
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-        className="w-full rounded-t-3xl p-6 pb-10 space-y-5"
+        className="relative z-10 w-full max-w-[430px] rounded-t-3xl p-6 space-y-5 overflow-y-auto overscroll-contain"
         style={{ background: '#151622', border: '1px solid rgba(255,255,255,0.08)' }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // Prevent clicks inside from closing sheet
       >
+        {/* Grab handle visual indicator */}
         <div className="w-10 h-1 rounded-full mx-auto mb-2" style={{ background: 'rgba(255,255,255,0.15)' }} />
 
+        {/* Header: Asset Info & Buy/Sell Toggle */}
         <div className="flex items-center justify-between">
           <div>
             <p className="font-black text-lg" style={{ color: 'var(--col-text-1)' }}>{asset.name}</p>
@@ -89,6 +120,7 @@ function TradeSheet({ asset, onClose }) {
           </div>
         </div>
 
+        {/* Input Area */}
         <div>
           <label className="text-[10px] font-black tracking-widest uppercase mb-2 block" style={{ color: 'var(--col-text-3)' }}>
             Amount ({asset.symbol})
@@ -107,11 +139,13 @@ function TradeSheet({ asset, onClose }) {
           />
         </div>
 
+        {/* Contextual Feedback (Cost & Balance) */}
         <div className="flex justify-between text-xs font-semibold" style={{ color: 'var(--col-text-3)' }}>
           <span>Total: <span className="nums font-black" style={{ color: 'var(--col-text-1)' }}>{fmt(total)}</span></span>
           <span>{mode === 'buy' ? `Balance: ${fmt(balance)}` : `Holding: ${holding.toFixed(4)} ${asset.symbol}`}</span>
         </div>
 
+        {/* Action Button */}
         <motion.button
           whileTap={{ y: 2, scale: 0.98 }}
           onClick={handleSubmit}
@@ -135,12 +169,21 @@ function TradeSheet({ asset, onClose }) {
           {status === 'loading' ? 'Processing...' : status === 'success' ? 'Done' : `${mode === 'buy' ? 'Buy' : 'Sell'} ${asset.symbol}`}
         </motion.button>
       </motion.div>
-    </motion.div>
+      </div>
+      )}
+    </AnimatePresence>,
+    document.body
   )
 }
 
+/**
+ * ── AssetRow Component ────────────────────────────────────────────────
+ * 
+ * Displays a single cryptocurrency in the list, formatting the price
+ * and applying dynamic colors for positive/negative daily changes.
+ */
 function AssetRow({ asset, onTrade }) {
-  const change = parseFloat(asset.price_change_24h || 0)
+  const change = parseFloat(asset.change_24h || 0)
   const up = change >= 0
 
   return (
@@ -164,7 +207,7 @@ function AssetRow({ asset, onTrade }) {
         <p className="text-xs font-semibold" style={{ color: 'var(--col-text-3)' }}>{asset.symbol}</p>
       </div>
       <div className="text-right">
-        <p className="font-black nums text-sm" style={{ color: 'var(--col-text-1)' }}>{fmt(asset.current_price)}</p>
+        <p className="font-black nums text-sm" style={{ color: 'var(--col-text-1)' }}>{fmt(asset.price || asset.current_price)}</p>
         <p className="text-xs font-bold nums flex items-center gap-0.5 justify-end"
           style={{ color: up ? '#3DD68C' : '#FF6B6B' }}>
           {up ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
@@ -178,20 +221,24 @@ function AssetRow({ asset, onTrade }) {
 export default function CryptoMarket() {
   const navigate   = useNavigate()
   const { assets, portfolio, fetchAssets, isLoading } = useCryptoStore()
+  
+  // Track which asset is currently selected for the TradeSheet
   const [selected, setSelected] = useState(null)
 
-  useEffect(() => { fetchAssets() }, [])
+  // Hydrate asset list on mount
+  useEffect(() => { fetchAssets() }, [fetchAssets])
 
+  // Calculate total USD value of user's current crypto holdings
   const totalValue = portfolio.reduce((sum, h) => {
-    const asset = assets.find(a => a.id === h.asset_id)
-    return sum + (parseFloat(h.quantity || 0) * parseFloat(asset?.current_price || 0))
+    const asset = assets.find(a => a.symbol === h.symbol)
+    return sum + (parseFloat(h.quantity || 0) * parseFloat(asset?.price || 0))
   }, 0)
 
   return (
     <div className="page-scroll">
       <div className="px-4 pt-5 pb-24 space-y-4">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex items-center gap-3">
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -215,7 +262,7 @@ export default function CryptoMarket() {
           </motion.button>
         </div>
 
-        {/* Portfolio value */}
+        {/* ── Portfolio Overview ── */}
         {totalValue > 0 && (
           <Card>
             <p className="text-[10px] font-black tracking-widest uppercase mb-1" style={{ color: 'var(--col-text-3)' }}>
@@ -225,7 +272,7 @@ export default function CryptoMarket() {
           </Card>
         )}
 
-        {/* Asset list */}
+        {/* ── Asset Directory ── */}
         <Card>
           <p className="text-[10px] font-black tracking-widest uppercase mb-3" style={{ color: 'var(--col-text-3)' }}>
             Assets
@@ -238,14 +285,14 @@ export default function CryptoMarket() {
             </div>
           ) : (
             <div className="space-y-2">
-              {assets.map(a => <AssetRow key={a.id} asset={a} onTrade={setSelected} />)}
+              {assets.map(a => <AssetRow key={a.id || a.symbol} asset={a} onTrade={setSelected} />)}
             </div>
           )}
         </Card>
       </div>
 
-      {/* Trade sheet */}
-      {selected && <TradeSheet asset={selected} onClose={() => setSelected(null)} />}
+      {/* ── Overlay Trade Sheet ── */}
+      <TradeSheet asset={selected} onClose={() => setSelected(null)} />
     </div>
   )
 }
